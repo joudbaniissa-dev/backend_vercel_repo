@@ -1,80 +1,83 @@
-// api/gemini-api.js
-
+// api/news.js
 export default async function handler(req, res) {
-  // --- CORS ---
+  // Allow CORS for your GitHub Pages origin
   res.setHeader('Access-Control-Allow-Origin', 'https://joudbaniissa-dev.github.io');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method === 'OPTIONS') {
+    // Preflight request
+    res.status(200).end();
+    return;
+  }
 
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST', 'OPTIONS']);
-    return res.status(405).json({ error: 'Method not allowed' });
+  const { topic } = req.query; // e.g. 'labor-market'
+
+  // Map topic → TwitterAPI.io URL
+  const urls = {
+    'labor-market':
+      'https://api.twitterapi.io/twitter/tweet/advanced_search?query=%28from%3AAlArabiya_Eng%20OR%20from%3Aarabnews%20OR%20from%3AalekhbariyaEN%29%20AND%20%28Saudi%20labor%20OR%20labor%20market%20OR%20Saudi%20jobs%20OR%20employment%20OR%20workforce%29%20-is%3Areply%20-is%3Aretweet%20-is%3Aquote&queryType=Latest&limit=20',
+    'empowerment':
+      'https://api.twitterapi.io/twitter/tweet/advanced_search?query=%28from%3AAlArabiya_Eng%20OR%20from%3Aarabnews%20OR%20from%3AalekhbariyaEN%29%20AND%20%28saudi%20society%20OR%20saudi%20community%20OR%20saudi%20social%20development%29%20-is%3Areply%20-is%3Aretweet%20-is%3Aquote&queryType=Latest&limit=25',
+    'non-profit':
+      'https://api.twitterapi.io/twitter/tweet/advanced_search?query=%28from%3AAlArabiya_Eng%20OR%20from%3Aarabnews%20OR%20from%3AalekhbariyaEN%29%20AND%20%28saudi%20donation%20OR%20saudi%20volunteer%20OR%20saudi%20non-profit%20OR%20saudi%20non-profit%20sector%20OR%20saudi%20charity%29%20-is%3Areply%20-is%3Aretweet%20-is%3Aquote&queryType=Latest&limit=25',
+    'strategic-partnerships':
+      'https://api.twitterapi.io/twitter/tweet/advanced_search?query=%28from%3AAlArabiya_Eng%20OR%20from%3Aarabnews%20OR%20from%3AalekhbariyaEN%29%20AND%20%28saudi%20strategic%20partnerships%20OR%20saudi%20strategic%20agreements%20OR%20saudi%20mou%20OR%20saudi%20collaboration%29%20-is%3Areply%20-is%3Aretweet%20-is%3Aquote&queryType=Latest&limit=25',
+  };
+
+  const upstreamUrl = urls[topic];
+  if (!upstreamUrl) {
+    res.status(400).json({ error: 'Unknown topic' });
+    return;
+  }
+
+  // ✅ Only allow these 3 accounts globally, for ALL topics
+  const ALLOWED_USERNAMES = new Set([
+    'arabnews',
+    'alarabiya_eng',
+    'alekhbariyaen',
+  ]);
+
+  function cleanTwitterResponse(raw) {
+    if (!raw || !Array.isArray(raw.tweets)) {
+      return raw; // If shape is different, just forward as-is
+    }
+
+    const filteredTweets = raw.tweets.filter((t) => {
+      const userName =
+        t?.author?.userName ||
+        t?.author?.username ||
+        t?.author?.screen_name;
+
+      if (!userName) return false;
+
+      return ALLOWED_USERNAMES.has(userName.toLowerCase());
+    });
+
+    return {
+      ...raw,
+      tweets: filteredTweets,
+    };
   }
 
   try {
-    // Vercel usually gives a parsed object, but be defensive in case it's a string
-    const rawBody = req.body || {};
-    const body = typeof rawBody === 'string' ? JSON.parse(rawBody || '{}') : rawBody;
-
-    let payload;
-
-    // Mode 1: simple `{ prompt: "..." }`
-    if (typeof body.prompt === 'string') {
-      payload = {
-        contents: [{ role: 'user', parts: [{ text: body.prompt }] }],
-        generationConfig: {
-          maxOutputTokens: 200,
-          temperature: 0.7,
-        },
-        safetySettings: [
-          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-        ],
-      };
-
-    // Mode 2: full Gemini-style payload from your frontend (`contents`, `systemInstruction`, etc.)
-    } else if (body && body.contents) {
-      payload = body;
-
-    } else {
-      return res
-        .status(400)
-        .json({ error: 'Missing "prompt" or Gemini "contents" in request body' });
-    }
-
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'Server missing GEMINI_API_KEY' });
-    }
-
-    const url =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=' +
-      apiKey;
-
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    const upstreamRes = await fetch(upstreamUrl, {
+      headers: { 'X-API-Key': process.env.TWITTER_API_KEY },
     });
 
-    const text = await resp.text(); // read once
-    if (!resp.ok) {
-      console.error('Gemini API error:', resp.status, text);
-      return res.status(resp.status).json({
-        error: 'Gemini API error',
-        status: resp.status,
-        details: text,
-      });
+    if (!upstreamRes.ok) {
+      res.status(upstreamRes.status).json({ error: 'Upstream error' });
+      return;
     }
 
-    const data = text ? JSON.parse(text) : {};
-    return res.status(200).json(data);
+    const data = await upstreamRes.json();
+
+    // ✅ Hard filter here so frontend NEVER sees tweets from other accounts
+    const cleaned = cleanTwitterResponse(data);
+
+    res.status(200).json(cleaned);
   } catch (err) {
-    console.error('Server error in gemini-api:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('Proxy error:', err);
+    res.status(500).json({ error: 'Failed to fetch tweets' });
   }
 }
