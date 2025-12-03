@@ -1,11 +1,14 @@
 // api/news.js
 export default async function handler(req, res) {
   // Allow CORS for your GitHub Pages origin
-  res.setHeader('Access-Control-Allow-Origin', 'https://joudbaniissa-dev.github.io');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader(
+    "Access-Control-Allow-Origin",
+    "https://joudbaniissa-dev.github.io"
+  );
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     // Preflight request
     res.status(200).end();
     return;
@@ -13,71 +16,119 @@ export default async function handler(req, res) {
 
   const { topic } = req.query; // e.g. 'labor-market'
 
-  // Map topic → TwitterAPI.io URL
-  const urls = {
-    'labor-market':
-      'https://api.twitterapi.io/twitter/tweet/advanced_search?query=%28from%3AAlArabiya_Eng%20OR%20from%3Aarabnews%20OR%20from%3AalekhbariyaEN%29%20AND%20%28Saudi%20labor%20OR%20labor%20market%20OR%20Saudi%20jobs%20OR%20employment%20OR%20workforce%29%20-is%3Areply%20-is%3Aretweet%20-is%3Aquote&queryType=Top&limit=50',
-    'empowerment':
-      'https://api.twitterapi.io/twitter/tweet/advanced_search?query=%28from%3AAlArabiya_Eng%20OR%20from%3Aarabnews%20OR%20from%3AalekhbariyaEN%29%20AND%20%28saudi%20society%20OR%20saudi%20community%20OR%20saudi%20social%20development%29%20-is%3Areply%20-is%3Aretweet%20-is%3Aquote&queryType=Top&limit=50',
-    'non-profit':
-      'https://api.twitterapi.io/twitter/tweet/advanced_search?query=%28from%3AAlArabiya_Eng%20OR%20from%3Aarabnews%20OR%20from%3AalekhbariyaEN%29%20AND%20%28saudi%20donation%20OR%20saudi%20volunteer%20OR%20saudi%20non-profit%20OR%20saudi%20non-profit%20sector%20OR%20saudi%20charity%29%20-is%3Areply%20-is%3Aretweet%20-is%3Aquote&queryType=Top&limit=50',
-    'strategic-partnerships':
-      'https://api.twitterapi.io/twitter/tweet/advanced_search?query=%28from%3AAlArabiya_Eng%20OR%20from%3Aarabnews%20OR%20from%3AalekhbariyaEN%29%20AND%20%28saudi%20strategic%20partnerships%20OR%20saudi%20strategic%20agreements%20OR%20saudi%20mou%20OR%20saudi%20collaboration%29%20-is%3Areply%20-is%3Aretweet%20-is%3Aquote&queryType=Top&limit=50',
+  // --- 1) Keywords per topic (used for ALL three accounts) ---
+  const TOPIC_KEYWORDS = {
+    "labor-market":
+      "(Saudi labor OR labor market OR Saudi jobs OR employment OR workforce)",
+    empowerment:
+      "(saudi society OR saudi community OR saudi social development)",
+    "non-profit":
+      "(saudi donation OR saudi volunteer OR saudi non-profit OR saudi non-profit sector OR saudi charity)",
+    "strategic-partnerships":
+      "(saudi strategic partnerships OR saudi strategic agreements OR saudi mou OR saudi collaboration)",
   };
 
-  const upstreamUrl = urls[topic];
-  if (!upstreamUrl) {
-    res.status(400).json({ error: 'Unknown topic' });
+  const keywords = TOPIC_KEYWORDS[topic];
+  if (!keywords) {
+    res.status(400).json({ error: "Unknown topic" });
     return;
   }
 
-  // ✅ Only allow these 3 accounts globally, for ALL topics
-  const ALLOWED_USERNAMES = new Set([
-    'arabnews',
-    'alarabiya_eng',
-    'alekhbariyaen',
-  ]);
+  // --- 2) The three official accounts we care about ---
+  const ACCOUNTS = ["AlArabiya_Eng", "arabnews", "alekhbariyaEN"];
 
-  function cleanTwitterResponse(raw) {
-    if (!raw || !Array.isArray(raw.tweets)) {
-      return raw; // If shape is different, just forward as-is
-    }
+  const ALLOWED_USERNAMES = new Set(
+    ACCOUNTS.map((u) => u.toLowerCase()) // lowercase for safety
+  );
 
-    const filteredTweets = raw.tweets.filter((t) => {
-      const userName =
-        t?.author?.userName ||
-        t?.author?.username ||
-        t?.author?.screen_name;
+  // --- 3) Helper to build TwitterAPI.io URL for one account+topic ---
+  function buildTwitterSearchUrl(account, keywords) {
+    const baseUrl =
+      "https://api.twitterapi.io/twitter/tweet/advanced_search";
 
-      if (!userName) return false;
+    // Query: from:ACCOUNT AND (keywords) -is:reply -is:retweet -is:quote
+    const query = `(from:${account}) AND ${keywords} -is:reply -is:retweet -is:quote`;
 
-      return ALLOWED_USERNAMES.has(userName.toLowerCase());
+    const params = new URLSearchParams({
+      query,
+      queryType: "Latest",
+      limit: "25", // per account; adjust if you want fewer/more
     });
 
-    return {
-      ...raw,
-      tweets: filteredTweets,
-    };
+    return `${baseUrl}?${params.toString()}`;
+  }
+
+  // --- 4) Fetch for each account in parallel ---
+  async function fetchForAccount(account) {
+    const url = buildTwitterSearchUrl(account, keywords);
+    try {
+      const resp = await fetch(url, {
+        headers: { "X-API-Key": process.env.TWITTER_API_KEY },
+      });
+      if (!resp.ok) {
+        console.error(`Upstream error for ${account}:`, resp.status);
+        return [];
+      }
+      const json = await resp.json();
+      const tweets = Array.isArray(json.tweets) ? json.tweets : [];
+      return tweets;
+    } catch (err) {
+      console.error(`Error fetching tweets for ${account}:`, err);
+      return [];
+    }
   }
 
   try {
-    const upstreamRes = await fetch(upstreamUrl, {
-      headers: { 'X-API-Key': process.env.TWITTER_API_KEY },
+    const allResults = await Promise.all(ACCOUNTS.map(fetchForAccount));
+    const allTweets = allResults.flat();
+
+    // --- 5) Hard filtering: only main tweets from the three accounts ---
+    const filtered = allTweets.filter((t) => {
+      const author = t?.author || {};
+      const userName =
+        author.userName || author.username || author.screen_name;
+
+      if (!userName) return false;
+
+      // must be one of the three accounts
+      if (!ALLOWED_USERNAMES.has(userName.toLowerCase())) return false;
+
+      // must be a main/original tweet, not reply/retweet/quote
+      const isReply = t.isReply === true || t.inReplyToId || t.inReplyToUserId;
+      const hasQuoted = !!t.quoted_tweet;
+      const hasRetweeted = !!t.retweeted_tweet;
+
+      if (isReply || hasQuoted || hasRetweeted) return false;
+
+      return true;
     });
 
-    if (!upstreamRes.ok) {
-      res.status(upstreamRes.status).json({ error: 'Upstream error' });
-      return;
+    // --- 6) De-duplicate by tweet id ---
+    const byId = new Map();
+    for (const t of filtered) {
+      const id = t.id || t.tweet_id || t.tweetId;
+      if (!id) continue;
+      if (!byId.has(id)) byId.set(id, t);
     }
+    const deduped = Array.from(byId.values());
 
-    const data = await upstreamRes.json();
+    // --- 7) Sort by createdAt descending (newest first) ---
+    deduped.sort((a, b) => {
+      const aDate = new Date(a.createdAt || a.created_at || 0).getTime();
+      const bDate = new Date(b.createdAt || b.created_at || 0).getTime();
+      return bDate - aDate;
+    });
 
-    // ✅ Hard filter here so frontend NEVER sees tweets from other accounts
-    const cleaned = cleanTwitterResponse(data);
-
-    res.status(200).json(cleaned);
+    // --- 8) Return a simple, consistent shape ---
+    res.status(200).json({
+      tweets: deduped,
+      has_next_page: false,
+      next_cursor: null,
+      topic,
+      sources: ACCOUNTS,
+    });
   } catch (err) {
-    console.error('Proxy error:', err);
-    res.status(500).json({ error: 'Failed to fetch tweets' });
+    console.error("Proxy error:", err);
+    res.status(500).json({ error: "Failed to fetch tweets" });
   }
 }
