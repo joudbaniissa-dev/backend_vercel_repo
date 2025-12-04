@@ -1,11 +1,18 @@
 // api/news.js
 export default async function handler(req, res) {
-  // Allow CORS for your GitHub Pages origin
-  res.setHeader(
-    "Access-Control-Allow-Origin",
+  // --- CORS: allow specific GitHub Pages frontends ---
+  const allowedOrigins = new Set([
     "https://joudbaniissa-dev.github.io",
+    "https://omar-shandaq.github.io",
+    // Note: browsers send origin without path, so this is redundant but harmless:
     "https://omar-shandaq.github.io/AI-Agent-/"
-  );
+  ]);
+
+  const origin = req.headers.origin;
+  if (allowedOrigins.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -26,7 +33,9 @@ export default async function handler(req, res) {
   // --- 1) ENGLISH KEYWORDS PER TOPIC (3 English accounts) ---
   // --- 1) SIMPLIFIED ENGLISH KEYWORDS (single words only) ---
   const TOPIC_KEYWORDS_EN = {
-    "labor-market": "(" + [
+    "labor-market":
+      "(" +
+      [
         "labor",
         "labour",
         "job",
@@ -36,10 +45,15 @@ export default async function handler(req, res) {
         "market",
         "hiring",
         "Saudization",
-        "localization"
-    ].join(" OR ") + ")",
-  
-    empowerment: "(" + [
+        "localization",
+        "nationals",
+        "talents",
+      ].join(" OR ") +
+      ")",
+
+    empowerment:
+      "(" +
+      [
         "empower",
         "empowerment",
         "community",
@@ -49,10 +63,14 @@ export default async function handler(req, res) {
         "citizens",
         "individuals",
         "programs",
-        "support"
-    ].join(" OR ") + ")",
-  
-    "non-profit": "(" + [
+        "support",
+        "program",
+      ].join(" OR ") +
+      ")",
+
+    "non-profit":
+      "(" +
+      [
         "nonprofit",
         "non-profit",
         "charity",
@@ -63,10 +81,13 @@ export default async function handler(req, res) {
         "foundation",
         "donations",
         "waqf",
-        "impact"
-    ].join(" OR ") + ")",
-  
-    "strategic-partnerships": "(" + [
+        "impact",
+      ].join(" OR ") +
+      ")",
+
+    "strategic-partnerships":
+      "(" +
+      [
         "partnership",
         "partnerships",
         "agreement",
@@ -76,16 +97,22 @@ export default async function handler(req, res) {
         "mou",
         "initiative",
         "alliances",
-        "joint"
-    ].join(" OR ") + ")"
+        "joint",
+        "strategic partnership",
+        "strategic partnerships",
+        "sustainable partnership",
+      ].join(" OR ") +
+      ")",
   };
+
   // --- 2) ARABIC KEYWORDS PER TOPIC (Arabic accounts, broader: tokens + phrases) ---
   const TOPIC_KEYWORDS_AR = {
-  
     // ================================================================
     // 1) LABOR MARKET (already working — lightly expanded)
     // ================================================================
-    "labor-market": "(" + [
+    "labor-market":
+      "(" +
+      [
         "سوق",
         "العمل",
         "وظائف",
@@ -105,25 +132,21 @@ export default async function handler(req, res) {
         "سلامة",
         "أجور",
         "رواتب",
-        "مهارات"
-    ].join(" OR ") + ")",
-  
-  
+        "مهارات",
+      ].join(" OR ") +
+      ")",
+
     // ================================================================
     // 2) EMPOWERMENT (expanded, high-frequency tokens)
     // ================================================================
-    empowerment: "(" + [
-        "تمكين",
-        "تمكين",
+    empowerment:
+      "(" +
+      [
         "تمكين",
         "مجتمع",
         "مجتمعي",
         "مجتمعات",
         "أفراد",
-        "الفرد",
-        "الأسر",
-        "أسرة",
-        "عائلة",
         "تنمية",
         "تنمية",
         "اجتماعية",
@@ -133,9 +156,7 @@ export default async function handler(req, res) {
         "مبادرات",
         "مبادرة",
         "دعم",
-        "دعم",
         "دعم اجتماعي",
-        "اعتماد",
         "ذاتي",
         "شمول",
         "اندماج",
@@ -143,14 +164,16 @@ export default async function handler(req, res) {
         "رفاهية",
         "جودة",
         "جودة الحياة",
-        "المجتمع السعودي"
-    ].join(" OR ") + ")",
-  
-  
+        "المجتمع السعودي",
+      ].join(" OR ") +
+      ")",
+
     // ================================================================
     // 3) NON-PROFIT (expanded with the most common Saudi non-profit vocabulary)
     // ================================================================
-    "non-profit": "(" + [
+    "non-profit":
+      "(" +
+      [
         "غير",
         "ربحي",
         "غير ربحي",
@@ -183,14 +206,16 @@ export default async function handler(req, res) {
         "تنمية",
         "تنمية الموارد",
         "عمل خيري",
-        "أعمال خيرية"
-    ].join(" OR ") + ")",
-  
-  
+        "أعمال خيرية",
+      ].join(" OR ") +
+      ")",
+
     // ================================================================
     // 4) STRATEGIC PARTNERSHIPS (very common words used in news)
     // ================================================================
-    "strategic-partnerships": "(" + [
+    "strategic-partnerships":
+      "(" +
+      [
         "شراكة",
         "شراكات",
         "استراتيجية",
@@ -198,7 +223,6 @@ export default async function handler(req, res) {
         "اتفاق",
         "اتفاقية",
         "اتفاقيات",
-        "تعاون",
         "تعاون",
         "مشترك",
         "مشتركة",
@@ -214,11 +238,10 @@ export default async function handler(req, res) {
         "شراكات دولية",
         "شراكات وطنية",
         "مبادرة",
-        "مبادرات"
-    ].join(" OR ") + ")"
+        "مبادرات",
+      ].join(" OR ") +
+      ")",
   };
-
-
 
   // Pick keyword set based on lang
   let keywords =
@@ -266,11 +289,20 @@ export default async function handler(req, res) {
 
   // --- 5) Fetch for each account in parallel ---
   async function fetchForAccount(account) {
-    // Special rule: for aawsat_News in Arabic, always require "السعودية"
-    const accountKeywords =
-      useArabic && account === "aawsat_News"
-        ? `(السعودية) AND ${keywords}`
-        : keywords;
+    // Default: just use topic keywords
+    let accountKeywords = keywords;
+
+    // Special rule: for aawsat_News in Arabic, always require "السعودية" or "سعودية"
+    if (useArabic && account === "aawsat_News") {
+      accountKeywords = `((السعودية OR سعودية) AND ${keywords})`;
+    }
+    // Special rule: for arabnews & AlArabiya_Eng in English, always require "Saudi"
+    else if (
+      !useArabic &&
+      (account === "arabnews" || account === "AlArabiya_Eng")
+    ) {
+      accountKeywords = `(Saudi AND ${keywords})`;
+    }
 
     const url = buildTwitterSearchUrl(account, accountKeywords);
     console.log("[TWITTER FETCH]", { topic, lang, account, url });
