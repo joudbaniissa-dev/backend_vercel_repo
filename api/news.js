@@ -1,6 +1,6 @@
 // api/news.js
 export default async function handler(req, res) {
-  // Allow CORS for your GitHub Pages origin
+  // CORS
   res.setHeader(
     "Access-Control-Allow-Origin",
     "https://joudbaniissa-dev.github.io"
@@ -8,57 +8,54 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    // Preflight request
-    res.status(200).end();
-    return;
-  }
+  if (req.method === "OPTIONS") return res.status(200).end();
 
-  const { topic } = req.query; // e.g. 'labor-market'
+  const { topic } = req.query;
 
-  // --- Normalize lang safely ---
-  const rawLang = Array.isArray(req.query.lang)
-    ? req.query.lang[0]
-    : req.query.lang;
-  let lang = (rawLang || "en").toLowerCase();
-  if (lang !== "ar" && lang !== "en") {
-    lang = "en";
-  }
+  let lang = req.query.lang;
+  if (Array.isArray(lang)) lang = lang[0];
+  lang = (lang || "en").toLowerCase();
+  if (lang !== "en" && lang !== "ar") lang = "en";
 
   const baseUrl =
     "https://api.twitterapi.io/twitter/tweet/advanced_search";
 
-  // ---------------------------------------------------------------------------
-  // 1) ENGLISH: RESTORE SIMPLE PER-TOPIC QUERIES (like twitterSearchConfig)
-  // ---------------------------------------------------------------------------
+  // ----------------------------------------------------------
+  // 1) FIXED ENGLISH KEYWORDS (QUOTED)
+  // ----------------------------------------------------------
 
-  // These match your frontend twitterSearchConfig exactly
   const EN_TOPIC_SIMPLE_QUERIES = {
     "labor-market":
-      "(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN) AND " +
-      "(Saudi labor OR labor market OR Saudi jobs OR employment OR workforce)",
+      `(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN)
+       AND ("Saudi labor" OR "labor market" OR "Saudi jobs" OR
+            "employment" OR "Saudi workforce" OR "job opportunities" OR
+            "workforce" OR "Saudization" OR "localization of jobs")`,
 
     empowerment:
-      "(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN) AND " +
-      "(saudi society OR saudi community OR saudi social development)",
+      `(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN)
+       AND ("empowering society" OR "empowering individuals" OR
+            "Saudi community" OR "Saudi youth" OR "Saudi women" OR
+            "social development" OR "community development")`,
 
     "non-profit":
-      "(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN) AND " +
-      "(saudi donation OR saudi volunteer OR saudi non-profit OR saudi non-profit sector OR saudi charity)",
+      `(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN)
+       AND ("non-profit sector" OR "charity" OR "Saudi volunteering" OR
+            "Saudi donation" OR "nonprofit organizations" OR
+            "Saudi NGO" OR "philanthropy")`,
 
     "strategic-partnerships":
-      "(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN) AND " +
-      "(saudi strategic partnerships OR saudi strategic agreements OR saudi mou OR saudi collaboration)",
+      `(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN)
+       AND ("strategic partnership" OR "strategic agreement" OR "MoU" OR
+            "collaboration" OR "Saudi partnership")`,
   };
 
+  // ----------------------------------------------------------
+  // ENGLISH ROUTE
+  // ----------------------------------------------------------
   if (lang === "en") {
-    // Use the simple query that we KNOW used to work
     let query = EN_TOPIC_SIMPLE_QUERIES[topic];
     if (!query) {
-      console.warn(
-        "[NEWS BACKEND] Unknown EN topic, falling back to labor-market:",
-        { topic }
-      );
+      console.warn("[NEWS] Unknown EN topic → fallback to labor-market");
       query = EN_TOPIC_SIMPLE_QUERIES["labor-market"];
     }
 
@@ -69,38 +66,28 @@ export default async function handler(req, res) {
     });
 
     const url = `${baseUrl}?${params.toString()}`;
-    console.log("[EN NEWS FETCH]", { topic, lang, url });
+    console.log("[EN FETCH]", url);
 
     try {
       const resp = await fetch(url, {
-        headers: {
-          "X-API-Key": process.env.TWITTER_API_KEY,
-        },
+        headers: { "X-API-Key": process.env.TWITTER_API_KEY },
       });
 
-      console.log("[EN NEWS STATUS]", { status: resp.status });
-
       if (!resp.ok) {
-        const text = await resp.text().catch(() => "");
-        console.error("[EN NEWS UPSTREAM ERROR]", {
-          status: resp.status,
-          body: text,
-        });
+        console.error("[EN ERROR]", await resp.text());
         return res.status(200).json({
           tweets: [],
-          has_next_page: false,
-          next_cursor: null,
           topic,
           lang,
           sources: ["AlArabiya_Eng", "arabnews", "alekhbariyaEN"],
         });
       }
 
-      const json = await resp.json();
-      const raw = Array.isArray(json.tweets)
-        ? json.tweets
-        : Array.isArray(json.data)
-        ? json.data
+      const data = await resp.json();
+      const raw = Array.isArray(data.tweets)
+        ? data.tweets
+        : Array.isArray(data.data)
+        ? data.data
         : [];
 
       const EN_ALLOWED = new Set([
@@ -109,53 +96,40 @@ export default async function handler(req, res) {
         "alekhbariyaen",
       ]);
 
-      // Filter + dedupe + sort (just like before)
-      const filtered = raw.filter((tweet) => {
-        const author = tweet.author || tweet.user || {};
-        const usernameRaw =
-          author.userName || author.username || author.screen_name || "";
-        const username = usernameRaw.toLowerCase();
-        if (!EN_ALLOWED.has(username)) return false;
-        if (!tweet.text && !tweet.full_text) return false;
-        return true;
+      const filtered = raw.filter((t) => {
+        const author = t.author || t.user || {};
+        const username =
+          (author.userName || author.username || author.screen_name || "").toLowerCase();
+        return EN_ALLOWED.has(username);
       });
 
-      const byId = new Map();
+      // dedupe
+      const map = new Map();
       for (const t of filtered) {
         const id = t.id || t.tweet_id || t.tweetId;
-        if (!id) continue;
-        if (!byId.has(id)) byId.set(id, t);
+        if (id) map.set(id, t);
       }
-      const deduped = Array.from(byId.values());
 
-      deduped.sort((a, b) => {
-        const aDate = new Date(a.createdAt || a.created_at || 0).getTime();
-        const bDate = new Date(b.createdAt || b.created_at || 0).getTime();
-        return bDate - aDate;
+      const tweets = [...map.values()].sort((a, b) => {
+        const A = new Date(a.createdAt || a.created_at || 0).getTime();
+        const B = new Date(b.createdAt || b.created_at || 0).getTime();
+        return B - A;
       });
 
       return res.status(200).json({
-        tweets: deduped,
-        has_next_page: false,
-        next_cursor: null,
+        tweets,
         topic,
         lang,
         sources: ["AlArabiya_Eng", "arabnews", "alekhbariyaEN"],
       });
     } catch (err) {
-      console.error("[EN NEWS PROXY ERROR]", err);
+      console.error("[EN PROXY ERROR]", err);
       return res.status(500).json({
-        error: "Failed to fetch EN tweets",
+        error: "EN fetch failed",
         details: err.message,
       });
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // 2) ARABIC: KEEP YOUR EXISTING ADVANCED LOGIC
-  // ---------------------------------------------------------------------------
-  // (copied from your current file, only used for lang === 'ar')
-  // :contentReference[oaicite:0]{index=0}
 
   // --- 2) ARABIC KEYWORDS PER TOPIC ---
   const TOPIC_KEYWORDS_AR = {
