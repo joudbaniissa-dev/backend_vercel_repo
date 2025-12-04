@@ -1,5 +1,3 @@
-please continue the code from where it cut off below:
-
 // api/news.js
 export default async function handler(req, res) {
   // Allow CORS for your GitHub Pages origin
@@ -17,9 +15,15 @@ export default async function handler(req, res) {
   }
 
   const { topic } = req.query; // e.g. 'labor-market'
-  const langParam = req.query.lang;
-  let lang = typeof langParam === "string" ? langParam.toLowerCase() : "en";
-  if (lang !== "ar" && lang !== "en") lang = "en";
+
+  // --- Normalize lang safely ---
+  const rawLang = Array.isArray(req.query.lang)
+    ? req.query.lang[0]
+    : req.query.lang;
+  let lang = (rawLang || "en").toLowerCase();
+  if (lang !== "ar" && lang !== "en") {
+    lang = "en";
+  }
 
   // --- 1) ENGLISH KEYWORDS PER TOPIC (3 English accounts) ---
   const TOPIC_KEYWORDS_EN = {
@@ -355,13 +359,12 @@ export default async function handler(req, res) {
       ")",
   };
 
-  // --- 2) ARABIC KEYWORDS PER TOPIC (Arabic accounts, broader: tokens + phrases) ---
+  // --- 2) ARABIC KEYWORDS PER TOPIC ---
   const TOPIC_KEYWORDS_AR = {
-    // Labor market / Saudization / jobs / work environment
+    // Labor market
     "labor-market":
       "(" +
       [
-        // base tokens (broader matching)
         "سوق",
         "العمل",
         "وظائف",
@@ -375,7 +378,6 @@ export default async function handler(req, res) {
         "القطاع العام",
         "القطاع غير الربحي",
 
-        // combined phrases (quoted)
         '"سوق العمل"',
         '"فرص العمل"',
         '"فرص وظيفية"',
@@ -408,11 +410,9 @@ export default async function handler(req, res) {
       ].join(" OR ") +
       ")",
 
-    // Empowering Society & Individuals
     empowerment:
       "(" +
       [
-        // base tokens
         "تمكين",
         "الأفراد",
         "الفرد",
@@ -433,7 +433,6 @@ export default async function handler(req, res) {
         "المسؤولية",
         "المسؤولية المجتمعية",
 
-        // phrases
         '"تمكين المجتمع"',
         '"تمكين الأفراد"',
         '"تمكين الشباب"',
@@ -455,11 +454,9 @@ export default async function handler(req, res) {
       ].join(" OR ") +
       ")",
 
-    // Non-profit / Third sector
     "non-profit":
       "(" +
       [
-        // base tokens
         "القطاع غير الربحي",
         "القطاع الثالث",
         "الجمعيات",
@@ -479,7 +476,6 @@ export default async function handler(req, res) {
         "المسؤولية المجتمعية",
         "المسؤولية الاجتماعية",
 
-        // phrases
         '"القطاع غير الربحي"',
         '"تنمية القطاع غير الربحي"',
         '"تمكين القطاع غير الربحي"',
@@ -495,11 +491,9 @@ export default async function handler(req, res) {
       ].join(" OR ") +
       ")",
 
-    // Governance quality / transparency / institutional development
     governance:
       "(" +
       [
-        // base
         "الحوكمة",
         "الشفافية",
         "المساءلة",
@@ -516,7 +510,6 @@ export default async function handler(req, res) {
         "التحول الرقمي",
         "التحول المؤسسي",
 
-        // phrases
         '"الحوكمة المؤسسية"',
         '"الحوكمة في القطاع غير الربحي"',
         '"الشفافية والمساءلة"',
@@ -530,11 +523,9 @@ export default async function handler(req, res) {
       ].join(" OR ") +
       ")",
 
-    // Labor resilience / crisis response
     "labor-resilience":
       "(" +
       [
-        // base
         "مرونة سوق العمل",
         "المرونة الاقتصادية",
         "المرونة الوظيفية",
@@ -547,28 +538,24 @@ export default async function handler(req, res) {
         "دعم الباحثين عن عمل",
         "دعم العمالة",
 
-        // phrases
         '"مرونة سوق العمل"',
         '"تعزيز مرونة سوق العمل"',
         '"حماية الوظائف"',
         '"برامج الحماية الاجتماعية"',
         '"دعم المتضررين"',
         '"برامج دعم التوظيف"',
-        '"برامج دعم الأجور",
-                '"برامج دعم الأجور"',
+        '"برامج دعم الأجور"',
         '"التعامل مع الأزمات"',
         '"استجابة سوق العمل للأزمات"',
         '"العمل عن بعد أثناء الأزمات"',
         '"العمل المرن أثناء الأزمات"',
-        '"إجراءات سوق العمل خلال الجائحة"'
+        '"إجراءات سوق العمل خلال الجائحة"',
       ].join(" OR ") +
       ")",
 
-    // Labor governance / regulations
     "labor-governance":
       "(" +
       [
-        // base
         "حوكمة سوق العمل",
         "التشريعات العمالية",
         "القوانين العمالية",
@@ -582,18 +569,15 @@ export default async function handler(req, res) {
         "شروط العمل",
         "عقود العمل",
 
-
-        // phrases
         '"حوكمة سوق العمل"',
         '"مراقبة تطبيق نظام العمل"',
         '"التشريعات العمالية"',
         '"القوانين العمالية"',
         '"شروط السلامة المهنية"',
-        '"إصابات العمل"'
+        '"إصابات العمل"',
       ].join(" OR ") +
       ")",
 
-    // Private sector
     "private-sector":
       "(" +
       [
@@ -608,16 +592,13 @@ export default async function handler(req, res) {
         "المشاريع الصغيرة",
         "ريادة الأعمال",
 
-
-        // phrases
         '"تنمية القطاع الخاص"',
         '"التوظيف في القطاع الخاص"',
         '"ريادة الأعمال"',
-        '"بيئة الأعمال في السعودية"'
+        '"بيئة الأعمال في السعودية"',
       ].join(" OR ") +
       ")",
 
-    // Civil society
     "civil-society":
       "(" +
       [
@@ -631,15 +612,12 @@ export default async function handler(req, res) {
         "الحوار المجتمعي",
         "المنظمات غير الحكومية",
 
-
-        // phrases
         '"المجتمع المدني"',
         '"المشاركة المجتمعية"',
-        '"الحوار المجتمعي"'
+        '"الحوار المجتمعي"',
       ].join(" OR ") +
       ")",
 
-    // Quality of life
     "quality-of-life":
       "(" +
       [
@@ -659,16 +637,13 @@ export default async function handler(req, res) {
         "الأنشطة الثقافية",
         "الفعاليات",
 
-
-        // phrases
         '"جودة الحياة"',
         '"تحسين جودة الحياة"',
         '"الأنشطة الترفيهية"',
-        '"الأنشطة الرياضية"'
+        '"الأنشطة الرياضية"',
       ].join(" OR ") +
       ")",
 
-    // Safety / OSH
     "labor-safety":
       "(" +
       [
@@ -681,16 +656,13 @@ export default async function handler(req, res) {
         "الوقاية من المخاطر",
         "إدارة المخاطر المهنية",
 
-
-        // phrases
         '"السلامة المهنية"',
         '"الصحة والسلامة المهنية"',
         '"إصابات العمل"',
-        '"حوادث العمل"'
+        '"حوادث العمل"',
       ].join(" OR ") +
       ")",
 
-    // Skills development
     "skills-development":
       "(" +
       [
@@ -705,15 +677,12 @@ export default async function handler(req, res) {
         "التعليم المهني",
         "التدريب المهني",
 
-
-        // phrases
         '"تطوير المهارات"',
         '"مهارات المستقبل"',
-        '"التدريب المهني"'
+        '"التدريب المهني"',
       ].join(" OR ") +
       ")",
 
-    // Nonprofit partnerships
     "nonprofit-partnerships":
       "(" +
       [
@@ -726,85 +695,150 @@ export default async function handler(req, res) {
         "برامج المسؤولية الاجتماعية",
         "التعاون مع الجمعيات",
 
-
-        // phrases
         '"الشراكة المجتمعية"',
         '"الشراكات مع القطاع غير الربحي"',
-        '"المسؤولية الاجتماعية"'
+        '"المسؤولية الاجتماعية"',
       ].join(" OR ") +
       ")",
   };
 
-  // --- 3) SELECT ACCOUNTS (Arabic vs English) ---
-  const ACCOUNTS =
+  // --- Pick keyword set based on lang ---
+  let keywords =
+    lang === "ar" ? TOPIC_KEYWORDS_AR[topic] : TOPIC_KEYWORDS_EN[topic];
+
+  if (!keywords) {
+    res.status(400).json({ error: "Unknown topic" });
+    return;
+  }
+
+  // --- 3) ACCOUNTS (this is the critical part) ---
+  // English mode: 3 English news accounts
+  // Arabic mode: sabqorg + SaudiNews50 + aawsat_News (with السعودية enforced)
+  let ACCOUNTS =
     lang === "ar"
       ? ["sabqorg", "SaudiNews50", "aawsat_News"]
       : ["AlArabiya_Eng", "arabnews", "alekhbariyaEN"];
 
-  console.log("🔎 BACKEND FETCH → topic:", topic, "lang:", lang, "accounts:", ACCOUNTS);
+  console.log(
+    "🔎 /api/news → topic:",
+    topic,
+    "lang:",
+    lang,
+    "ACCOUNTS:",
+    ACCOUNTS
+  );
 
-  const QUERY = lang === "ar"
-    ? TOPIC_KEYWORDS_AR[topic] || TOPIC_KEYWORDS_AR["labor-market"]
-    : TOPIC_KEYWORDS_EN[topic] || TOPIC_KEYWORDS_EN["labor-market"];
+  const ALLOWED_USERNAMES = new Set(
+    ACCOUNTS.map((u) => u.toLowerCase()) // lowercase for safety
+  );
 
-  // --- 4) BUILD FINAL TWITTER QUERY ---
-  function buildQuery(account) {
-    const fromPart =
-      lang === "ar"
-        ? `(from:${account} AND lang:ar)`
-        : `(from:${account})`;
+  const useArabic = lang === "ar";
 
-    return `${fromPart} AND ${QUERY} -is:retweet -is:reply -is:quote`;
-  }
+  // --- 4) Build TwitterAPI.io URL for one account ---
+  function buildTwitterSearchUrl(account, keywordsForQuery) {
+    const baseUrl =
+      "https://api.twitterapi.io/twitter/tweet/advanced_search";
 
-  // --- 5) CALL TWITTER API ---
-  const fetch = require("node-fetch");
+    const fromPart = useArabic
+      ? `from:${account} lang:ar`
+      : `from:${account}`;
 
-  async function searchTweets(query) {
-    const url =
-      "https://api.twitterapi.io/twitter/tweet/advanced_search?query=" +
-      encodeURIComponent(query);
+    // Only original tweets (no replies/retweets/quotes)
+    const query = `(${fromPart}) AND ${keywordsForQuery} -is:reply -is:retweet -is:quote`;
 
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${process.env.TWITTER_API_KEY}` },
+    const params = new URLSearchParams({
+      query,
+      queryType: "Latest",
+      limit: "50",
     });
 
-    if (!response.ok) {
-      console.log("❌ Twitter API Error:", response.status, await response.text());
+    return `${baseUrl}?${params.toString()}`;
+  }
+
+  const fetch = require("node-fetch");
+
+  // --- 5) Fetch for each account in parallel ---
+  async function fetchForAccount(account) {
+    // For aawsat_News in Arabic, always require "السعودية"
+    let accountKeywords = keywords;
+    if (lang === "ar" && account === "aawsat_News") {
+      accountKeywords = `(${keywords}) AND "السعودية"`;
+    }
+
+    const url = buildTwitterSearchUrl(account, accountKeywords);
+    console.log("🔍 Query for", account, ":", url);
+
+    const resp = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${process.env.TWITTER_API_KEY}`,
+      },
+    });
+
+    if (!resp.ok) {
+      console.error(
+        "❌ TwitterAPI.io error for",
+        account,
+        resp.status,
+        await resp.text()
+      );
       return [];
     }
 
-    const data = await response.json();
-    return data?.data ?? [];
+    const json = await resp.json();
+    const data = Array.isArray(json?.data) ? json.data : [];
+
+    // Attach username + createdAt normalizations here if needed later
+    return data;
   }
 
   try {
-    let allTweets = [];
-
-    for (const acc of ACCOUNTS) {
-      const q = buildQuery(acc);
-      console.log("🔍 Query Executed:", q);
-      const tweets = await searchTweets(q);
-      allTweets.push(...tweets);
-    }
-
-    // sort newest → oldest
-    allTweets.sort((a, b) => {
-      const da = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const db = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return db - da;
+    // Fetch for all accounts in parallel
+    const results = await Promise.all(ACCOUNTS.map((acc) => fetchForAccount(acc)));
+    let all = [];
+    results.forEach((arr) => {
+      if (Array.isArray(arr)) all.push(...arr);
     });
 
+    // --- 6) Filter by allowed usernames + sanity checks ---
+    const filtered = all.filter((tweet) => {
+      const author = tweet.author || tweet.user || {};
+      const usernameRaw =
+        author.userName || author.username || author.screen_name || "";
+      const username = usernameRaw.toLowerCase();
+
+      if (!ALLOWED_USERNAMES.has(username)) return false;
+      if (!tweet.text && !tweet.full_text) return false;
+
+      return true;
+    });
+
+    // --- 7) De-duplicate by tweet id ---
+    const byId = new Map();
+    for (const t of filtered) {
+      const id = t.id || t.tweet_id || t.tweetId;
+      if (!id) continue;
+      if (!byId.has(id)) byId.set(id, t);
+    }
+    const deduped = Array.from(byId.values());
+
+    // --- 8) Sort by createdAt (newest first) ---
+    deduped.sort((a, b) => {
+      const aDate = new Date(a.createdAt || a.created_at || 0).getTime();
+      const bDate = new Date(b.createdAt || b.created_at || 0).getTime();
+      return bDate - aDate;
+    });
+
+    // --- 9) Return response ---
     res.status(200).json({
+      tweets: deduped,
+      has_next_page: false,
+      next_cursor: null,
       topic,
       lang,
-      accounts: ACCOUNTS,
-      count: allTweets.length,
-      tweets: allTweets,
+      sources: ACCOUNTS,
     });
   } catch (err) {
-    console.error("🔥 Backend Error:", err);
-    res.status(500).json({ error: "Server Error", details: err.message });
+    console.error("Proxy error:", err);
+    res.status(500).json({ error: "Failed to fetch tweets" });
   }
 }
-
