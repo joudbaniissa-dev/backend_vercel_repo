@@ -703,13 +703,22 @@ export default async function handler(req, res) {
   };
 
   // --- Pick keyword set based on lang ---
+  // Pick keyword set based on lang
   let keywords =
     lang === "ar" ? TOPIC_KEYWORDS_AR[topic] : TOPIC_KEYWORDS_EN[topic];
-
+  
+  // If topic not found in the map, gracefully fall back to labor-market
   if (!keywords) {
-    res.status(400).json({ error: "Unknown topic" });
-    return;
+    console.warn("[NEWS BACKEND] Unknown topic, falling back to labor-market:", {
+      topic,
+      lang,
+    });
+    keywords =
+      lang === "ar"
+        ? TOPIC_KEYWORDS_AR["labor-market"]
+        : TOPIC_KEYWORDS_EN["labor-market"];
   }
+
 
   // --- 3) ACCOUNTS (this is the critical part) ---
   // English mode: 3 English news accounts
