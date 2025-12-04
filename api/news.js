@@ -25,339 +25,137 @@ export default async function handler(req, res) {
     lang = "en";
   }
 
-  // --- 1) ENGLISH KEYWORDS PER TOPIC (3 English accounts) ---
-  const TOPIC_KEYWORDS_EN = {
+  const baseUrl =
+    "https://api.twitterapi.io/twitter/tweet/advanced_search";
+
+  // ---------------------------------------------------------------------------
+  // 1) ENGLISH: RESTORE SIMPLE PER-TOPIC QUERIES (like twitterSearchConfig)
+  // ---------------------------------------------------------------------------
+
+  // These match your frontend twitterSearchConfig exactly
+  const EN_TOPIC_SIMPLE_QUERIES = {
     "labor-market":
-      "(" +
-      [
-        "Saudi labor",
-        "Saudi labour",
-        "labor market",
-        "labour market",
-        "Saudi jobs",
-        "employment",
-        "workforce",
-        "Saudi workforce",
-        "job opportunities in Saudi",
-        "unemployment",
-        "Saudization",
-        "localization of jobs",
-        "HRSD labor market",
-        "work environment",
-        "decent work",
-        "quality of work",
-
-        // HRSD + initiatives
-        "HRSD initiatives",
-        "Ministry of Human Resources and Social Development",
-        "human resources and social development",
-        "Saudi Ministry of Labor",
-        "Saudi Ministry of Labour",
-
-        // supporting phrases
-        "empower Saudi nationals",
-        "support Saudi workers",
-        "safe work environment",
-        "inclusive employment",
-        "flexible work",
-        "remote work",
-        "remote jobs",
-        "part-time jobs",
-        "skills development",
-        "upskilling",
-        "reskilling",
-        "job mobility",
-        "labor regulations",
-        "employment regulations",
-        "workplace reforms",
-        "labor reform",
-        "wage protection",
-        "occupational safety",
-        "occupational health and safety",
-        "work injuries",
-        "occupational risks",
-        "workplace inspection",
-        "labor inspection",
-
-        // Vision 2030 + labor
-        "Vision 2030 employment",
-        "Vision 2030 labor market",
-        "national transformation labor",
-      ].join(" OR ") +
-      ")",
+      "(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN) AND " +
+      "(Saudi labor OR labor market OR Saudi jobs OR employment OR workforce)",
 
     empowerment:
-      "(" +
-      [
-        "empowering society",
-        "empowering individuals",
-        "empowering citizens",
-        "empowering Saudis",
-        "empowering women",
-        "women's empowerment",
-        "youth empowerment",
-        "social development",
-        "community development",
-        "social programs",
-        "social protection",
-        "social safety net",
-        "family support",
-        "support for families",
-        "support for persons with disabilities",
-        "volunteering",
-        "volunteer work",
-        "civil society",
-        "non-profit initiatives",
-        "community initiatives",
-        "social responsibility",
-        "corporate social responsibility",
-        "quality of life",
-        "quality of life programs",
-        "social cohesion",
-        "social inclusion",
-        "inclusion",
-        "marginalized groups",
-        "vulnerable groups",
-        "support vulnerable groups",
-        "digital inclusion",
-        "digital literacy",
-        "financial literacy",
-        "self-reliance",
-        "entrepreneurship support",
-        "small business support",
-        "social entrepreneurship",
-      ].join(" OR ") +
-      ")",
+      "(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN) AND " +
+      "(saudi society OR saudi community OR saudi social development)",
 
     "non-profit":
-      "(" +
-      [
-        "non-profit sector",
-        "nonprofit sector",
-        "non profit sector",
-        "charitable sector",
-        "charity sector",
-        "third sector",
-        "civil society organizations",
-        "non-governmental organizations",
-        "NGOs in Saudi",
-        "Saudi NGOs",
-        "charitable organizations",
-        "charities in Saudi",
-        "philanthropy in Saudi",
-        "philanthropic initiatives",
-        "endowments",
-        "waqf",
-        "social investment",
-        "impact investment",
-        "social impact",
-        "non-profit governance",
-        "non-profit regulations",
-        "non-profit development",
-        "non-profit empowerment",
-        "supporting the non-profit sector",
-        "capacity building for non-profits",
-        "non-profit sustainability",
-        "volunteer organizations",
-        "volunteerism in Saudi",
-      ].join(" OR ") +
-      ")",
+      "(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN) AND " +
+      "(saudi donation OR saudi volunteer OR saudi non-profit OR saudi non-profit sector OR saudi charity)",
 
-    governance:
-      "(" +
-      [
-        "governance",
-        "good governance",
-        "institutional governance",
-        "corporate governance",
-        "transparency",
-        "accountability",
-        "anti-corruption",
-        "compliance",
-        "risk management",
-        "internal controls",
-        "performance measurement",
-        "organizational excellence",
-        "quality management",
-        "ISO certification",
-        "institutional development",
-        "organizational development",
-        "policies and procedures",
-        "digital governance",
-        "e-governance",
-        "data governance",
-        "AI governance",
-
-        "strategic planning",
-        "strategic initiatives",
-        "KPIs",
-        "key performance indicators",
-        "results-based management",
-
-        "Vision 2030 governance",
-        "government transformation",
-        "institutional transformation",
-      ].join(" OR ") +
-      ")",
-
-    "labor-resilience":
-      "(" +
-      [
-        "labor market resilience",
-        "resilient labor market",
-        "employment resilience",
-        "job security",
-        "income security",
-        "social protection",
-        "social safety net",
-        "unemployment insurance",
-        "wage protection system",
-        "crisis response",
-        "COVID-19 labor measures",
-        "labor market shocks",
-        "economic shocks",
-        "support for workers in crises",
-        "remote work readiness",
-        "future of work",
-        "automation and jobs",
-        "skills of the future",
-        "skills mismatch",
-        "labor market data",
-        "labor market observatories",
-        "labor market indicators",
-      ].join(" OR ") +
-      ")",
-
-    "labor-governance":
-      "(" +
-      [
-        "labor market governance",
-        "labor regulations",
-        "employment regulations",
-        "labor laws",
-        "occupational safety and health",
-        "OSH governance",
-        "work inspection",
-        "labor inspection",
-        "wage governance",
-        "compliance with labor law",
-        "labor disputes",
-        "labor courts",
-        "worker rights",
-        "employer obligations",
-        "governance of employment programs",
-        "governance of social programs",
-      ].join(" OR ") +
-      ")",
-
-    "private-sector":
-      "(" +
-      [
-        "private sector development",
-        "private sector partnerships",
-        "public-private partnership",
-        "PPP",
-        "SME support",
-        "support for small and medium enterprises",
-        "entrepreneurship support",
-        "business environment",
-        "investment climate",
-        "ease of doing business",
-        "private sector jobs",
-        "job creation in private sector",
-        "labor productivity",
-        "workforce productivity",
-        "human capital development",
-      ].join(" OR ") +
-      ")",
-
-    "civil-society":
-      "(" +
-      [
-        "civil society",
-        "civil society organizations",
-        "CSOs",
-        "NGOs",
-        "community-based organizations",
-        "volunteer groups",
-        "social movements",
-        "citizen engagement",
-        "public participation",
-        "social dialogue",
-        "tripartite dialogue",
-        "workers' organizations",
-        "employers' organizations",
-      ].join(" OR ") +
-      ")",
-
-    "quality-of-life":
-      "(" +
-      [
-        "quality of life",
-        "wellbeing",
-        "well-being",
-        "mental health",
-        "health and safety",
-        "safe communities",
-        "green spaces",
-        "public spaces",
-        "cultural activities",
-        "sports and recreation",
-        "leisure activities",
-        "arts and culture",
-        "entertainment sector",
-        "tourism development",
-      ].join(" OR ") +
-      ")",
-
-    "labor-safety":
-      "(" +
-      [
-        "occupational safety",
-        "occupational health and safety",
-        "OSH",
-        "work-related injuries",
-        "work accidents",
-        "workplace safety",
-        "safety regulations",
-        "health and safety standards",
-        "risk assessment",
-        "safety training",
-      ].join(" OR ") +
-      ")",
-
-    "skills-development":
-      "(" +
-      [
-        "skills development",
-        "upskilling",
-        "reskilling",
-        "lifelong learning",
-        "vocational training",
-        "TVET",
-        "technical and vocational education and training",
-        "apprenticeships",
-        "on-the-job training",
-        "digital skills",
-        "future skills",
-        "STEM skills",
-      ].join(" OR ") +
-      ")",
-
-    "nonprofit-partnerships":
-      "(" +
-      [
-        "partnerships with non-profit sector",
-        "collaboration with NGOs",
-        "public-nonprofit partnership",
-        "corporate social responsibility",
-        "CSR initiatives",
-        "joint initiatives",
-        "partnerships with non-profit sector",
-        "partnerships with private sector",
-      ].join(" OR ") +
-      ")",
+    "strategic-partnerships":
+      "(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN) AND " +
+      "(saudi strategic partnerships OR saudi strategic agreements OR saudi mou OR saudi collaboration)",
   };
+
+  if (lang === "en") {
+    // Use the simple query that we KNOW used to work
+    let query = EN_TOPIC_SIMPLE_QUERIES[topic];
+    if (!query) {
+      console.warn(
+        "[NEWS BACKEND] Unknown EN topic, falling back to labor-market:",
+        { topic }
+      );
+      query = EN_TOPIC_SIMPLE_QUERIES["labor-market"];
+    }
+
+    const params = new URLSearchParams({
+      query,
+      queryType: "Latest",
+      limit: "100",
+    });
+
+    const url = `${baseUrl}?${params.toString()}`;
+    console.log("[EN NEWS FETCH]", { topic, lang, url });
+
+    try {
+      const resp = await fetch(url, {
+        headers: {
+          "X-API-Key": process.env.TWITTER_API_KEY,
+        },
+      });
+
+      console.log("[EN NEWS STATUS]", { status: resp.status });
+
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => "");
+        console.error("[EN NEWS UPSTREAM ERROR]", {
+          status: resp.status,
+          body: text,
+        });
+        return res.status(200).json({
+          tweets: [],
+          has_next_page: false,
+          next_cursor: null,
+          topic,
+          lang,
+          sources: ["AlArabiya_Eng", "arabnews", "alekhbariyaEN"],
+        });
+      }
+
+      const json = await resp.json();
+      const raw = Array.isArray(json.tweets)
+        ? json.tweets
+        : Array.isArray(json.data)
+        ? json.data
+        : [];
+
+      const EN_ALLOWED = new Set([
+        "alarabiya_eng",
+        "arabnews",
+        "alekhbariyaen",
+      ]);
+
+      // Filter + dedupe + sort (just like before)
+      const filtered = raw.filter((tweet) => {
+        const author = tweet.author || tweet.user || {};
+        const usernameRaw =
+          author.userName || author.username || author.screen_name || "";
+        const username = usernameRaw.toLowerCase();
+        if (!EN_ALLOWED.has(username)) return false;
+        if (!tweet.text && !tweet.full_text) return false;
+        return true;
+      });
+
+      const byId = new Map();
+      for (const t of filtered) {
+        const id = t.id || t.tweet_id || t.tweetId;
+        if (!id) continue;
+        if (!byId.has(id)) byId.set(id, t);
+      }
+      const deduped = Array.from(byId.values());
+
+      deduped.sort((a, b) => {
+        const aDate = new Date(a.createdAt || a.created_at || 0).getTime();
+        const bDate = new Date(b.createdAt || b.created_at || 0).getTime();
+        return bDate - aDate;
+      });
+
+      return res.status(200).json({
+        tweets: deduped,
+        has_next_page: false,
+        next_cursor: null,
+        topic,
+        lang,
+        sources: ["AlArabiya_Eng", "arabnews", "alekhbariyaEN"],
+      });
+    } catch (err) {
+      console.error("[EN NEWS PROXY ERROR]", err);
+      return res.status(500).json({
+        error: "Failed to fetch EN tweets",
+        details: err.message,
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2) ARABIC: KEEP YOUR EXISTING ADVANCED LOGIC
+  // ---------------------------------------------------------------------------
+  // (copied from your current file, only used for lang === 'ar')
+  // :contentReference[oaicite:0]{index=0}
 
   // --- 2) ARABIC KEYWORDS PER TOPIC ---
   const TOPIC_KEYWORDS_AR = {
@@ -702,57 +500,25 @@ export default async function handler(req, res) {
       ")",
   };
 
-  // --- Pick keyword set based on lang ---
-  // Pick keyword set based on lang
-  let keywords =
-    lang === "ar" ? TOPIC_KEYWORDS_AR[topic] : TOPIC_KEYWORDS_EN[topic];
-  
-  // If topic not found in the map, gracefully fall back to labor-market
-  if (!keywords) {
-    console.warn("[NEWS BACKEND] Unknown topic, falling back to labor-market:", {
-      topic,
-      lang,
-    });
-    keywords =
-      lang === "ar"
-        ? TOPIC_KEYWORDS_AR["labor-market"]
-        : TOPIC_KEYWORDS_EN["labor-market"];
+  // Arabic keywords by topic (fallback to labor-market)
+  let arKeywords = TOPIC_KEYWORDS_AR[topic];
+  if (!arKeywords) {
+    console.warn(
+      "[NEWS BACKEND] Unknown AR topic, falling back to labor-market:",
+      { topic }
+    );
+    arKeywords = TOPIC_KEYWORDS_AR["labor-market"];
   }
 
-
-  // --- 3) ACCOUNTS (this is the critical part) ---
-  // English mode: 3 English news accounts
-  // Arabic mode: sabqorg + SaudiNews50 + aawsat_News (with السعودية enforced)
-  let ACCOUNTS =
-    lang === "ar"
-      ? ["sabqorg", "SaudiNews50", "aawsat_News"]
-      : ["AlArabiya_Eng", "arabnews", "alekhbariyaEN"];
-
-  console.log(
-    "🔎 /api/news → topic:",
-    topic,
-    "lang:",
-    lang,
-    "ACCOUNTS:",
-    ACCOUNTS
+  const ACCOUNTS_AR = ["sabqorg", "SaudiNews50", "aawsat_News"];
+  const ALLOWED_USERNAMES_AR = new Set(
+    ACCOUNTS_AR.map((u) => u.toLowerCase())
   );
 
-  const ALLOWED_USERNAMES = new Set(
-    ACCOUNTS.map((u) => u.toLowerCase()) // lowercase for safety
-  );
+  const useArabic = true;
 
-  const useArabic = lang === "ar";
-
-  // --- 4) Build TwitterAPI.io URL for one account ---
-  function buildTwitterSearchUrl(account, keywordsForQuery) {
-    const baseUrl =
-      "https://api.twitterapi.io/twitter/tweet/advanced_search";
-
-    const fromPart = useArabic
-      ? `from:${account} lang:ar`
-      : `from:${account}`;
-
-    // Only original tweets (no replies/retweets/quotes)
+  function buildTwitterSearchUrlAr(account, keywordsForQuery) {
+    const fromPart = `from:${account} lang:ar`;
     const query = `(${fromPart}) AND ${keywordsForQuery} -is:reply -is:retweet -is:quote`;
 
     const params = new URLSearchParams({
@@ -764,79 +530,72 @@ export default async function handler(req, res) {
     return `${baseUrl}?${params.toString()}`;
   }
 
-  
-
-  // --- 5) Fetch for each account in parallel ---
-  // --- 5) Fetch for each account in parallel ---
-  async function fetchForAccount(account) {
+  async function fetchForAccountAr(account) {
     // For aawsat_News in Arabic, always require "السعودية"
     const accountKeywords =
-      useArabic && account === "aawsat_News"
-        ? `(السعودية) AND ${keywords}`
-        : keywords;
-  
-    const url = buildTwitterSearchUrl(account, accountKeywords);
-    console.log("[TWITTER FETCH]", { topic, lang, account, url });
-  
+      account === "aawsat_News"
+        ? `(السعودية) AND ${arKeywords}`
+        : arKeywords;
+
+    const url = buildTwitterSearchUrlAr(account, accountKeywords);
+    console.log("[AR TWITTER FETCH]", { topic, lang, account, url });
+
     const resp = await fetch(url, {
       headers: {
-        // IMPORTANT: TwitterAPI.io expects X-API-Key, not Authorization
         "X-API-Key": process.env.TWITTER_API_KEY,
       },
     });
-  
-    console.log("[TWITTER STATUS]", { account, status: resp.status });
-  
+
+    console.log("[AR TWITTER STATUS]", { account, status: resp.status });
+
     if (!resp.ok) {
       const text = await resp.text().catch(() => "");
-      console.error("[TWITTER UPSTREAM ERROR]", {
+      console.error("[AR TWITTER UPSTREAM ERROR]", {
         account,
         status: resp.status,
         body: text,
       });
       return [];
     }
-  
+
     const json = await resp.json();
     const tweets = Array.isArray(json.tweets)
       ? json.tweets
       : Array.isArray(json.data)
       ? json.data
       : [];
-  
-    console.log("[TWITTER RESULT]", {
+
+    console.log("[AR TWITTER RESULT]", {
       account,
       topic,
       lang,
       tweetCount: tweets.length,
     });
-  
+
     return tweets;
   }
 
-
   try {
-    // Fetch for all accounts in parallel
-    const results = await Promise.all(ACCOUNTS.map((acc) => fetchForAccount(acc)));
+    const results = await Promise.all(
+      ACCOUNTS_AR.map((acc) => fetchForAccountAr(acc))
+    );
     let all = [];
     results.forEach((arr) => {
       if (Array.isArray(arr)) all.push(...arr);
     });
 
-    // --- 6) Filter by allowed usernames + sanity checks ---
     const filtered = all.filter((tweet) => {
       const author = tweet.author || tweet.user || {};
       const usernameRaw =
         author.userName || author.username || author.screen_name || "";
       const username = usernameRaw.toLowerCase();
 
-      if (!ALLOWED_USERNAMES.has(username)) return false;
+      if (!ALLOWED_USERNAMES_AR.has(username)) return false;
       if (!tweet.text && !tweet.full_text) return false;
 
       return true;
     });
 
-    // --- 7) De-duplicate by tweet id ---
     const byId = new Map();
     for (const t of filtered) {
       const id = t.id || t.tweet_id || t.tweetId;
@@ -845,24 +604,25 @@ export default async function handler(req, res) {
     }
     const deduped = Array.from(byId.values());
 
-    // --- 8) Sort by createdAt (newest first) ---
     deduped.sort((a, b) => {
       const aDate = new Date(a.createdAt || a.created_at || 0).getTime();
       const bDate = new Date(b.createdAt || b.created_at || 0).getTime();
       return bDate - aDate;
     });
 
-    // --- 9) Return response ---
-    res.status(200).json({
+    return res.status(200).json({
       tweets: deduped,
       has_next_page: false,
       next_cursor: null,
       topic,
       lang,
-      sources: ACCOUNTS,
+      sources: ACCOUNTS_AR,
     });
   } catch (err) {
-    console.error("Proxy error:", err);
-    res.status(500).json({ error: "Failed to fetch tweets" });
+    console.error("[AR NEWS PROXY ERROR]", err);
+    return res.status(500).json({
+      error: "Failed to fetch AR tweets",
+      details: err.message,
+    });
   }
 }
