@@ -16,7 +16,6 @@ export default async function handler(req, res) {
 
   const { topic } = req.query; // e.g. 'labor-market'
   const lang = req.query.lang || "en"; // 'en' (default) or 'ar'
-  const useArabic = lang === "ar";
 
   // --- 1) ENGLISH KEYWORDS PER TOPIC (3 English accounts) ---
   const TOPIC_KEYWORDS_EN = {
@@ -110,54 +109,225 @@ export default async function handler(req, res) {
       ")",
   };
 
-  // For now, we *only* use keywords for English.
-  // Arabic will use account + lang filters, no heavy topic keywords,
-  // to guarantee we actually get Arabic tweets.
+  // --- 2) ARABIC KEYWORDS PER TOPIC (Arabic accounts, broader: tokens + phrases) ---
+  const TOPIC_KEYWORDS_AR = {
+    // Labor market / Saudization / jobs / work environment
+    "labor-market":
+      "(" +
+      [
+        // base tokens (broader matching)
+        "سوق",
+        "العمل",
+        "وظائف",
+        "الوظائف",
+        "فرص",
+        "فرص العمل",
+        "التوظيف",
+        "البطالة",
+        "توطين",
+        "السعودة",
+        "بيئة",
+        "بيئة العمل",
+        "سلامة",
+        "مهنية",
+        "تمكين",
+        "الشباب",
+        "السعوديين",
+        "جودة",
+        "الحياة",
 
-  // Validate topic (for English); for Arabic we'll still accept any of the same keys.
-  if (!TOPIC_KEYWORDS_EN[topic]) {
+        // key phrases
+        '"سوق العمل"',
+        '"سوق العمل السعودي"',
+        '"توطين الوظائف"',
+        '"بيئة عمل جاذبة"',
+        '"بيئة عمل آمنة"',
+        '"سلامة مهنية"',
+        '"ممارسات عمل"',
+        '"تمكين السعوديين"',
+        '"تمكين الشباب"',
+        '"جودة الحياة"',
+        '"نوعية الحياة"',
+        '"رفع كفاءة سوق العمل"',
+      ].join(" OR ") +
+      ")",
+
+    // Empowering Society & Individuals
+    empowerment:
+      "(" +
+      [
+        // base tokens
+        "تمكين",
+        "الأفراد",
+        "الفرد",
+        "المجتمع",
+        "المجتمعات",
+        "الأسر",
+        "التنمية",
+        "التنمية الاجتماعية",
+        "الدعم",
+        "الدعم الاجتماعي",
+        "برامج",
+        "برامج تمكين",
+        "برامج مجتمعية",
+        "جودة",
+        "جودة الحياة",
+        "رفاه",
+        "رفاه المجتمع",
+        "المسؤولية",
+        "المسؤولية المجتمعية",
+
+        // phrases
+        '"تمكين الأفراد"',
+        '"تمكين الفرد"',
+        '"تمكين المجتمع"',
+        '"تمكين المجتمعات"',
+        '"تمكين الأسر"',
+        '"التنمية الاجتماعية"',
+        '"برامج تمكين"',
+        '"برامج مجتمعية"',
+        '"برامج التنمية الاجتماعية"',
+        '"تعزيز الاعتماد على الذات"',
+        '"الاعتماد على الذات"',
+        '"الدعم الاجتماعي"',
+        '"برامج الدعم"',
+        '"جودة الحياة"',
+        '"رفاه المجتمع"',
+        '"المسؤولية المجتمعية"',
+      ].join(" OR ") +
+      ")",
+
+    // Enabling the Non-Profit Sector
+    "non-profit":
+      "(" +
+      [
+        // base tokens
+        "القطاع",
+        "غير الربحي",
+        "الخيري",
+        "الجمعيات",
+        "الجمعيات الخيرية",
+        "جمعيات",
+        "جمعيات أهلية",
+        "منظمات",
+        "منظمات غير ربحية",
+        "مؤسسات",
+        "مؤسسات خيرية",
+        "العمل الخيري",
+        "العمل التطوعي",
+        "تطوع",
+        "متطوعين",
+        "مبادرات",
+        "مبادرات تطوعية",
+        "الأثر",
+        "الأثر الاجتماعي",
+        "المسؤولية الاجتماعية",
+        "استدامة",
+        "استدامة مالية",
+        "تنمية الموارد",
+
+        // phrases
+        '"القطاع غير الربحي"',
+        '"القطاع الثالث"',
+        '"القطاع الخيري"',
+        '"المنظمات غير الربحية"',
+        '"المنظمات الأهلية"',
+        '"الجمعيات الخيرية"',
+        '"جمعيات أهلية"',
+        '"مؤسسات خيرية"',
+        '"العمل الخيري"',
+        '"العمل التطوعي"',
+        '"مبادرات تطوعية"',
+        '"تمكين القطاع غير الربحي"',
+        '"حوكمة القطاع غير الربحي"',
+        '"الأثر الاجتماعي"',
+        '"المسؤولية الاجتماعية"',
+        '"استدامة مالية"',
+        '"تنمية الموارد"',
+      ].join(" OR ") +
+      ")",
+
+    // Strategic Partnerships
+    "strategic-partnerships":
+      "(" +
+      [
+        // base tokens
+        "شراكات",
+        "شراكة",
+        "استراتيجية",
+        "وطنية",
+        "دولية",
+        "مستدامة",
+        "فاعلة",
+        "اتفاقيات",
+        "اتفاقية",
+        "تعاون",
+        "مذكرات",
+        "مذكرة تفاهم",
+        "مذكرات تفاهم",
+        "تحالفات",
+        "تعاون دولي",
+        "القطاع الخاص",
+        "القطاع العام",
+        "القطاعين العام والخاص",
+        "القطاع غير الربحي",
+
+        // phrases
+        '"شراكات استراتيجية"',
+        '"شراكة استراتيجية"',
+        '"شراكات وطنية"',
+        '"شراكات دولية"',
+        '"شراكات مستدامة"',
+        '"شراكات فاعلة"',
+        '"اتفاقيات تعاون"',
+        '"اتفاقية تعاون"',
+        '"اتفاقيات شراكة"',
+        '"مذكرة تفاهم"',
+        '"مذكرات تفاهم"',
+        '"تعاون مشترك"',
+        '"شراكات القطاعين العام والخاص"',
+        '"شراكات مع القطاع الخاص"',
+        '"شراكات مع القطاع غير الربحي"',
+        '"تحالفات"',
+        '"تعاون دولي"',
+      ].join(" OR ") +
+      ")",
+  };
+
+  // Pick keyword set based on lang
+  let keywords =
+    lang === "ar" ? TOPIC_KEYWORDS_AR[topic] : TOPIC_KEYWORDS_EN[topic];
+
+  if (!keywords) {
     res.status(400).json({ error: "Unknown topic" });
     return;
   }
 
-  // --- 2) ACCOUNTS ---
-  const ACCOUNTS_EN = ["AlArabiya_Eng", "arabnews", "alekhbariyaEN"];
-  const ACCOUNTS_AR = ["sabqorg", "SaudiNews50", "aawsat_News"];
-
-  const ACCOUNTS = useArabic ? ACCOUNTS_AR : ACCOUNTS_EN;
+  // --- 3) ACCOUNTS ---
+  // English mode: 3 English news accounts
+  // Arabic mode: sabqorg + SaudiNews50 + aawsat_News
+  let ACCOUNTS =
+    lang === "ar"
+      ? ["sabqorg", "SaudiNews50", "aawsat_News"]
+      : ["AlArabiya_Eng", "arabnews", "alekhbariyaEN"];
 
   const ALLOWED_USERNAMES = new Set(
     ACCOUNTS.map((u) => u.toLowerCase()) // lowercase for safety
   );
 
-  // --- 3) Build TwitterAPI.io URL for one account ---
-  function buildTwitterSearchUrl(account) {
+  const useArabic = lang === "ar";
+
+  // --- 4) Build TwitterAPI.io URL for one account ---
+  function buildTwitterSearchUrl(account, keywordsForQuery) {
     const baseUrl =
       "https://api.twitterapi.io/twitter/tweet/advanced_search";
 
-    let query;
+    const fromPart = useArabic
+      ? `from:${account} lang:ar`
+      : `from:${account}`;
 
-    if (useArabic) {
-      // Arabic mode:
-      //  - sabqorg & SaudiNews50: just latest Arabic main tweets (no topic filter).
-      //  - aawsat_News: require "السعودية" to keep it Saudi-related.
-      const fromPart = `from:${account} lang:ar`;
-
-      if (account === "aawsat_News") {
-        query = `(${fromPart}) السعودية -is:reply -is:retweet -is:quote`;
-      } else {
-        query = `(${fromPart}) -is:reply -is:retweet -is:quote`;
-      }
-    } else {
-      // English mode: use topic-specific keywords
-      const keywords = TOPIC_KEYWORDS_EN[topic] || "";
-      const fromPart = `from:${account}`;
-      const core =
-        keywords && keywords.trim().length > 0
-          ? `(${fromPart}) AND ${keywords}`
-          : `(${fromPart})`;
-      query = `${core} -is:reply -is:retweet -is:quote`;
-    }
+    // Only original tweets (no replies/retweets/quotes)
+    const query = `(${fromPart}) AND ${keywordsForQuery} -is:reply -is:retweet -is:quote`;
 
     const params = new URLSearchParams({
       query,
@@ -168,9 +338,15 @@ export default async function handler(req, res) {
     return `${baseUrl}?${params.toString()}`;
   }
 
-  // --- 4) Fetch for each account in parallel ---
+  // --- 5) Fetch for each account in parallel ---
   async function fetchForAccount(account) {
-    const url = buildTwitterSearchUrl(account);
+    // Special rule: for aawsat_News in Arabic, always require "السعودية"
+    const accountKeywords =
+      useArabic && account === "aawsat_News"
+        ? `(السعودية) AND ${keywords}`
+        : keywords;
+
+    const url = buildTwitterSearchUrl(account, accountKeywords);
     console.log("[TWITTER FETCH]", { topic, lang, account, url });
 
     try {
@@ -204,7 +380,7 @@ export default async function handler(req, res) {
     const allResults = await Promise.all(ACCOUNTS.map(fetchForAccount));
     const allTweets = allResults.flat();
 
-    // --- 5) Hard filtering: only main/original tweets from allowed accounts ---
+    // --- 6) Hard filtering: only main/original tweets from allowed accounts ---
     const filtered = allTweets.filter((t) => {
       const author = t?.author || {};
       const userName =
@@ -212,10 +388,10 @@ export default async function handler(req, res) {
 
       if (!userName) return false;
 
-      // 5a) ensure author is one of our configured accounts
+      // ensure author is one of our configured accounts
       if (!ALLOWED_USERNAMES.has(userName.toLowerCase())) return false;
 
-      // 5b) must be a main/original tweet, not reply/retweet/quote
+      // must be a main/original tweet, not reply/retweet/quote
       const isReply =
         t.isReply === true || t.inReplyToId || t.inReplyToUserId;
       const hasQuoted = !!t.quoted_tweet;
@@ -223,16 +399,10 @@ export default async function handler(req, res) {
 
       if (isReply || hasQuoted || hasRetweeted) return false;
 
-      // 5c) In Arabic mode, enforce lang === 'ar'
-      if (useArabic) {
-        const tweetLang = t.lang || t.language || null;
-        if (tweetLang && tweetLang.toLowerCase() !== "ar") return false;
-      }
-
       return true;
     });
 
-    // --- 6) De-duplicate by tweet id ---
+    // --- 7) De-duplicate by tweet id ---
     const byId = new Map();
     for (const t of filtered) {
       const id = t.id || t.tweet_id || t.tweetId;
@@ -241,14 +411,14 @@ export default async function handler(req, res) {
     }
     const deduped = Array.from(byId.values());
 
-    // --- 7) Sort by createdAt (newest first) ---
+    // --- 8) Sort by createdAt (newest first) ---
     deduped.sort((a, b) => {
       const aDate = new Date(a.createdAt || a.created_at || 0).getTime();
       const bDate = new Date(b.createdAt || b.created_at || 0).getTime();
       return bDate - aDate;
     });
 
-    // --- 8) Return response ---
+    // --- 9) Return response ---
     res.status(200).json({
       tweets: deduped,
       has_next_page: false,
