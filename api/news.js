@@ -1,6 +1,6 @@
 // api/news.js
 export default async function handler(req, res) {
-  // CORS
+  // Allow CORS for your GitHub Pages origin
   res.setHeader(
     "Access-Control-Allow-Origin",
     "https://joudbaniissa-dev.github.io"
@@ -8,183 +8,161 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") return res.status(200).end();
-
-  const { topic } = req.query;
-
-  let lang = req.query.lang;
-  if (Array.isArray(lang)) lang = lang[0];
-  lang = (lang || "en").toLowerCase();
-  if (lang !== "en" && lang !== "ar") lang = "en";
-
-  const baseUrl =
-    "https://api.twitterapi.io/twitter/tweet/advanced_search";
-
-  // ----------------------------------------------------------
-  // 1) FIXED ENGLISH KEYWORDS (QUOTED)
-  // ----------------------------------------------------------
-
-  const EN_TOPIC_SIMPLE_QUERIES = {
-    "labor-market":
-      `(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN)
-       AND ("Saudi labor" OR "labor market" OR "Saudi jobs" OR
-            "employment" OR "Saudi workforce" OR "job opportunities" OR
-            "workforce" OR "Saudization" OR "localization of jobs")`,
-
-    empowerment:
-      `(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN)
-       AND ("empowering society" OR "empowering individuals" OR
-            "Saudi community" OR "Saudi youth" OR "Saudi women" OR
-            "social development" OR "community development")`,
-
-    "non-profit":
-      `(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN)
-       AND ("non-profit sector" OR "charity" OR "Saudi volunteering" OR
-            "Saudi donation" OR "nonprofit organizations" OR
-            "Saudi NGO" OR "philanthropy")`,
-
-    "strategic-partnerships":
-      `(from:AlArabiya_Eng OR from:arabnews OR from:alekhbariyaEN)
-       AND ("strategic partnership" OR "strategic agreement" OR "MoU" OR
-            "collaboration" OR "Saudi partnership")`,
-  };
-
-  // ----------------------------------------------------------
-  // ENGLISH ROUTE
-  // ----------------------------------------------------------
-  if (lang === "en") {
-    let query = EN_TOPIC_SIMPLE_QUERIES[topic];
-    if (!query) {
-      console.warn("[NEWS] Unknown EN topic → fallback to labor-market");
-      query = EN_TOPIC_SIMPLE_QUERIES["labor-market"];
-    }
-
-    const params = new URLSearchParams({
-      query,
-      queryType: "Latest",
-      limit: "100",
-    });
-
-    const url = `${baseUrl}?${params.toString()}`;
-    console.log("[EN FETCH]", url);
-
-    try {
-      const resp = await fetch(url, {
-        headers: { "X-API-Key": process.env.TWITTER_API_KEY },
-      });
-
-      if (!resp.ok) {
-        console.error("[EN ERROR]", await resp.text());
-        return res.status(200).json({
-          tweets: [],
-          topic,
-          lang,
-          sources: ["AlArabiya_Eng", "arabnews", "alekhbariyaEN"],
-        });
-      }
-
-      const data = await resp.json();
-      const raw = Array.isArray(data.tweets)
-        ? data.tweets
-        : Array.isArray(data.data)
-        ? data.data
-        : [];
-
-      const EN_ALLOWED = new Set([
-        "alarabiya_eng",
-        "arabnews",
-        "alekhbariyaen",
-      ]);
-
-      const filtered = raw.filter((t) => {
-        const author = t.author || t.user || {};
-        const username =
-          (author.userName || author.username || author.screen_name || "").toLowerCase();
-        return EN_ALLOWED.has(username);
-      });
-
-      // dedupe
-      const map = new Map();
-      for (const t of filtered) {
-        const id = t.id || t.tweet_id || t.tweetId;
-        if (id) map.set(id, t);
-      }
-
-      const tweets = [...map.values()].sort((a, b) => {
-        const A = new Date(a.createdAt || a.created_at || 0).getTime();
-        const B = new Date(b.createdAt || b.created_at || 0).getTime();
-        return B - A;
-      });
-
-      return res.status(200).json({
-        tweets,
-        topic,
-        lang,
-        sources: ["AlArabiya_Eng", "arabnews", "alekhbariyaEN"],
-      });
-    } catch (err) {
-      console.error("[EN PROXY ERROR]", err);
-      return res.status(500).json({
-        error: "EN fetch failed",
-        details: err.message,
-      });
-    }
+  if (req.method === "OPTIONS") {
+    // Preflight request
+    res.status(200).end();
+    return;
   }
 
-  // --- 2) ARABIC KEYWORDS PER TOPIC ---
-  const TOPIC_KEYWORDS_AR = {
-    // Labor market
+  const { topic } = req.query; // e.g. 'labor-market'
+
+  // Normalize lang (default 'en')
+  let rawLang = Array.isArray(req.query.lang)
+    ? req.query.lang[0]
+    : req.query.lang;
+  let lang = (rawLang || "en").toLowerCase();
+
+  // --- 1) ENGLISH KEYWORDS PER TOPIC (3 English accounts) ---
+  const TOPIC_KEYWORDS_EN = {
     "labor-market":
       "(" +
       [
-        "سوق",
-        "العمل",
-        "وظائف",
-        "التوظيف",
-        "القوى العاملة",
-        "العاملين",
-        "الموظفين",
-        "المنشآت",
-        "القطاع الخاص",
-        "القطاع الحكومي",
-        "القطاع العام",
-        "القطاع غير الربحي",
-
-        '"سوق العمل"',
-        '"فرص العمل"',
-        '"فرص وظيفية"',
-        '"فرص توظيف"',
-        '"الباحثين عن عمل"',
-        '"العمل المرن"',
-        '"العمل الحر"',
-        '"العمل الجزئي"',
-        '"العمل عن بعد"',
-        '"توطين الوظائف"',
-        '"سعودة الوظائف"',
-        '"السعودة"',
-        '"توطين"',
-        '"الموارد البشرية والتنمية الاجتماعية"',
-        '"وزارة الموارد البشرية والتنمية الاجتماعية"',
-        '"التنمية الاجتماعية"',
-        '"بيئة العمل"',
-        '"تحسين بيئة العمل"',
-        '"جودة بيئة العمل"',
-        '"السلامة والصحة المهنية"',
-        '"السلامة المهنية"',
-        '"الصحة والسلامة في العمل"',
-        '"التفتيش العمالي"',
-        '"حقوق العاملين"',
-        '"حقوق الموظفين"',
-        '"حماية الأجور"',
-        '"نظام حماية الأجور"',
-        '"التدريب والتأهيل"',
-        '"رفع كفاءة سوق العمل"',
+        "Saudi labor",
+        "Saudi labour",
+        "labor market",
+        "labour market",
+        "Saudi jobs",
+        "employment",
+        "workforce",
+        "Saudi workforce",
+        "job opportunities in Saudi",
+        "unemployment",
+        "Saudization",
+        "localization of jobs",
+        "HRSD labor market",
+        "work environment",
+        "decent work",
+        "quality of work",
+        "labor reforms",
+        "labor policies",
       ].join(" OR ") +
       ")",
 
     empowerment:
       "(" +
       [
+        "Saudi society",
+        "saudi community",
+        "saudi social development",
+        "social empowerment",
+        "empowering individuals",
+        "empowering communities",
+        "empowering citizens",
+        "self reliance",
+        "self-reliance",
+        "economic empowerment",
+        "community programs",
+        "social programs",
+        "HRSD programs",
+        "quality of life",
+        "social cohesion",
+        "social inclusion",
+      ].join(" OR ") +
+      ")",
+
+    "non-profit":
+      "(" +
+      [
+        "non-profit sector",
+        "nonprofit sector",
+        "third sector",
+        "saudi non-profit",
+        "saudi nonprofit",
+        "saudi charity",
+        "charitable organizations in Saudi",
+        "charity organizations",
+        "volunteer work",
+        "volunteering",
+        "voluntary sector",
+        "foundations",
+        "endowments",
+        "waqf",
+        "social impact",
+        "corporate social responsibility",
+        "CSR programs",
+      ].join(" OR ") +
+      ")",
+
+    "strategic-partnerships":
+      "(" +
+      [
+        "strategic partnerships",
+        "strategic partnership",
+        "saudi strategic partnerships",
+        "national partnerships",
+        "international partnerships",
+        "partnership agreements",
+        "cooperation agreements",
+        "memorandums of understanding",
+        "MOUs",
+        "public private partnership",
+        "PPP",
+        "joint initiatives",
+        "partnerships with non-profit sector",
+        "partnerships with private sector",
+      ].join(" OR ") +
+      ")",
+  };
+
+  // --- 2) ARABIC KEYWORDS PER TOPIC (Arabic accounts, broader: tokens + phrases) ---
+  // 🔴 As requested: Arabic section is left exactly as in your file
+  const TOPIC_KEYWORDS_AR = {
+    // Labor market / Saudization / jobs / work environment
+    "labor-market":
+      "(" +
+      [
+        // base tokens (broader matching)
+        "سوق",
+        "العمل",
+        "وظائف",
+        "الوظائف",
+        "فرص",
+        "فرص العمل",
+        "التوظيف",
+        "البطالة",
+        "توطين",
+        "السعودة",
+        "بيئة",
+        "بيئة العمل",
+        "سلامة",
+        "مهنية",
+        "تمكين",
+        "الشباب",
+        "السعوديين",
+        "جودة",
+        "الحياة",
+
+        // key phrases
+        '"سوق العمل"',
+        '"سوق العمل السعودي"',
+        '"توطين الوظائف"',
+        '"بيئة عمل جاذبة"',
+        '"بيئة عمل آمنة"',
+        '"سلامة مهنية"',
+        '"ممارسات عمل"',
+        '"تمكين السعوديين"',
+        '"تمكين الشباب"',
+        '"جودة الحياة"',
+        '"نوعية الحياة"',
+        '"رفع كفاءة سوق العمل"',
+      ].join(" OR ") +
+      ")",
+
+    // Empowering Society & Individuals
+    empowerment:
+      "(" +
+      [
+        // base tokens
         "تمكين",
         "الأفراد",
         "الفرد",
@@ -205,294 +183,156 @@ export default async function handler(req, res) {
         "المسؤولية",
         "المسؤولية المجتمعية",
 
-        '"تمكين المجتمع"',
+        // phrases
         '"تمكين الأفراد"',
-        '"تمكين الشباب"',
-        '"تمكين المرأة"',
-        '"التمكين الاجتماعي"',
+        '"تمكين الفرد"',
+        '"تمكين المجتمع"',
+        '"تمكين المجتمعات"',
+        '"تمكين الأسر"',
+        '"التنمية الاجتماعية"',
+        '"برامج تمكين"',
+        '"برامج مجتمعية"',
+        '"برامج التنمية الاجتماعية"',
+        '"تعزيز الاعتماد على الذات"',
+        '"الاعتماد على الذات"',
         '"الدعم الاجتماعي"',
-        '"برامج جودة الحياة"',
-        '"تحسين جودة الحياة"',
-        '"دعم الأسر"',
-        '"حماية الأسرة"',
-        '"حماية الفئات الأكثر احتياجاً"',
-        '"الفئات المستفيدة"',
-        '"برامج الحماية الاجتماعية"',
-        '"برامج الدعم الحكومي"',
-        '"برامج التنمية المجتمعية"',
-        '"القطاع غير الربحي"',
-        '"المسؤولية الاجتماعية للشركات"',
-        '"الشراكة المجتمعية"',
+        '"برامج الدعم"',
+        '"جودة الحياة"',
+        '"رفاه المجتمع"',
+        '"المسؤولية المجتمعية"',
       ].join(" OR ") +
       ")",
 
+    // Enabling the Non-Profit Sector
     "non-profit":
       "(" +
       [
-        "القطاع غير الربحي",
-        "القطاع الثالث",
+        // base tokens
+        "القطاع",
+        "غير الربحي",
+        "الخيري",
         "الجمعيات",
-        "المؤسسات الأهلية",
-        "المؤسسات غير الربحية",
-        "المنظمات غير الربحية",
-        "المنظمات غير الحكومية",
-        "المنظمات الأهلية",
-        "الوقف",
-        "الأوقاف",
+        "الجمعيات الخيرية",
+        "جمعيات",
+        "جمعيات أهلية",
+        "منظمات",
+        "منظمات غير ربحية",
+        "مؤسسات",
+        "مؤسسات خيرية",
         "العمل الخيري",
-        "الأعمال الخيرية",
         "العمل التطوعي",
-        "المتطوعين",
-        "المتطوع",
-        "التطوع",
-        "المسؤولية المجتمعية",
+        "تطوع",
+        "متطوعين",
+        "مبادرات",
+        "مبادرات تطوعية",
+        "الأثر",
+        "الأثر الاجتماعي",
         "المسؤولية الاجتماعية",
+        "استدامة",
+        "استدامة مالية",
+        "تنمية الموارد",
 
+        // phrases
         '"القطاع غير الربحي"',
-        '"تنمية القطاع غير الربحي"',
+        '"القطاع الثالث"',
+        '"القطاع الخيري"',
+        '"المنظمات غير الربحية"',
+        '"المنظمات الأهلية"',
+        '"الجمعيات الخيرية"',
+        '"جمعيات أهلية"',
+        '"مؤسسات خيرية"',
+        '"العمل الخيري"',
+        '"العمل التطوعي"',
+        '"مبادرات تطوعية"',
         '"تمكين القطاع غير الربحي"',
-        '"استدامة القطاع غير الربحي"',
         '"حوكمة القطاع غير الربحي"',
-        '"الحوكمة في الجمعيات"',
-        '"الحوكمة في المؤسسات الأهلية"',
-        '"برامج التطوع"',
-        '"منصة التطوع"',
-        '"تنظيم العمل التطوعي"',
-        '"الإسهام المجتمعي"',
-        '"التنمية المجتمعية"',
-      ].join(" OR ") +
-      ")",
-
-    governance:
-      "(" +
-      [
-        "الحوكمة",
-        "الشفافية",
-        "المساءلة",
-        "الالتزام",
-        "الامتثال",
-        "إدارة المخاطر",
-        "الرقابة الداخلية",
-        "التطوير المؤسسي",
-        "التطوير التنظيمي",
-        "الجودة",
-        "إدارة الجودة",
-        "التميز المؤسسي",
-        "السياسات والإجراءات",
-        "التحول الرقمي",
-        "التحول المؤسسي",
-
-        '"الحوكمة المؤسسية"',
-        '"الحوكمة في القطاع غير الربحي"',
-        '"الشفافية والمساءلة"',
-        '"إدارة المخاطر المؤسسية"',
-        '"تعزيز الامتثال"',
-        '"التطوير المؤسسي"',
-        '"التطوير التنظيمي"',
-        '"التميز المؤسسي"',
-        '"التحول المؤسسي"',
-        '"التحول الرقمي في الخدمات"',
-      ].join(" OR ") +
-      ")",
-
-    "labor-resilience":
-      "(" +
-      [
-        "مرونة سوق العمل",
-        "المرونة الاقتصادية",
-        "المرونة الوظيفية",
-        "أمن الوظيفة",
-        "أمن الدخل",
-        "الحماية الاجتماعية",
-        "شبكات الحماية الاجتماعية",
-        "التأمين ضد التعطل",
-        "صندوق تنمية الموارد البشرية",
-        "دعم الباحثين عن عمل",
-        "دعم العمالة",
-
-        '"مرونة سوق العمل"',
-        '"تعزيز مرونة سوق العمل"',
-        '"حماية الوظائف"',
-        '"برامج الحماية الاجتماعية"',
-        '"دعم المتضررين"',
-        '"برامج دعم التوظيف"',
-        '"برامج دعم الأجور"',
-        '"التعامل مع الأزمات"',
-        '"استجابة سوق العمل للأزمات"',
-        '"العمل عن بعد أثناء الأزمات"',
-        '"العمل المرن أثناء الأزمات"',
-        '"إجراءات سوق العمل خلال الجائحة"',
-      ].join(" OR ") +
-      ")",
-
-    "labor-governance":
-      "(" +
-      [
-        "حوكمة سوق العمل",
-        "التشريعات العمالية",
-        "القوانين العمالية",
-        "نظام العمل",
-        "العمل السعودي",
-        "الرقابة العمالية",
-        "التفتيش العمالي",
-        "فض المنازعات العمالية",
-        "حقوق العامل",
-        "حقوق الموظف",
-        "شروط العمل",
-        "عقود العمل",
-
-        '"حوكمة سوق العمل"',
-        '"مراقبة تطبيق نظام العمل"',
-        '"التشريعات العمالية"',
-        '"القوانين العمالية"',
-        '"شروط السلامة المهنية"',
-        '"إصابات العمل"',
-      ].join(" OR ") +
-      ")",
-
-    "private-sector":
-      "(" +
-      [
-        "القطاع الخاص",
-        "المنشآت",
-        "الشركات",
-        "الاستثمار",
-        "بيئة الأعمال",
-        "التوظيف في القطاع الخاص",
-        "الوظائف في القطاع الخاص",
-        "تنمية القطاع الخاص",
-        "المشاريع الصغيرة",
-        "ريادة الأعمال",
-
-        '"تنمية القطاع الخاص"',
-        '"التوظيف في القطاع الخاص"',
-        '"ريادة الأعمال"',
-        '"بيئة الأعمال في السعودية"',
-      ].join(" OR ") +
-      ")",
-
-    "civil-society":
-      "(" +
-      [
-        "المجتمع المدني",
-        "المنظمات الأهلية",
-        "الجمعيات",
-        "المبادرات المجتمعية",
-        "التطوع",
-        "المتطوعين",
-        "المشاركة المجتمعية",
-        "الحوار المجتمعي",
-        "المنظمات غير الحكومية",
-
-        '"المجتمع المدني"',
-        '"المشاركة المجتمعية"',
-        '"الحوار المجتمعي"',
-      ].join(" OR ") +
-      ")",
-
-    "quality-of-life":
-      "(" +
-      [
-        "جودة الحياة",
-        "رفاهية",
-        "الصحة النفسية",
-        "الصحة",
-        "السلامة",
-        "الرياضة",
-        "الأنشطة الرياضية",
-        "الأنشطة الترفيهية",
-        "الترفيه",
-        "المساحات العامة",
-        "المساحات الخضراء",
-        "الحدائق",
-        "الثقافة",
-        "الأنشطة الثقافية",
-        "الفعاليات",
-
-        '"جودة الحياة"',
-        '"تحسين جودة الحياة"',
-        '"الأنشطة الترفيهية"',
-        '"الأنشطة الرياضية"',
-      ].join(" OR ") +
-      ")",
-
-    "labor-safety":
-      "(" +
-      [
-        "السلامة المهنية",
-        "الصحة المهنية",
-        "الصحة والسلامة",
-        "إصابات العمل",
-        "الحوادث العمالية",
-        "بيئة العمل الآمنة",
-        "الوقاية من المخاطر",
-        "إدارة المخاطر المهنية",
-
-        '"السلامة المهنية"',
-        '"الصحة والسلامة المهنية"',
-        '"إصابات العمل"',
-        '"حوادث العمل"',
-      ].join(" OR ") +
-      ")",
-
-    "skills-development":
-      "(" +
-      [
-        "المهارات",
-        "تطوير المهارات",
-        "رفع المهارات",
-        "إعادة التأهيل",
-        "التدريب",
-        "برامج التدريب",
-        "مهارات المستقبل",
-        "المهارات الرقمية",
-        "التعليم المهني",
-        "التدريب المهني",
-
-        '"تطوير المهارات"',
-        '"مهارات المستقبل"',
-        '"التدريب المهني"',
-      ].join(" OR ") +
-      ")",
-
-    "nonprofit-partnerships":
-      "(" +
-      [
-        "الشراكات",
-        "الشراكات المجتمعية",
-        "الشراكة مع القطاع غير الربحي",
-        "الشراكات غير الربحية",
-        "الشراكات مع الجمعيات",
-        "المسؤولية الاجتماعية",
-        "برامج المسؤولية الاجتماعية",
-        "التعاون مع الجمعيات",
-
-        '"الشراكة المجتمعية"',
-        '"الشراكات مع القطاع غير الربحي"',
+        '"الأثر الاجتماعي"',
         '"المسؤولية الاجتماعية"',
+        '"استدامة مالية"',
+        '"تنمية الموارد"',
+      ].join(" OR ") +
+      ")",
+
+    // Strategic Partnerships
+    "strategic-partnerships":
+      "(" +
+      [
+        // base tokens
+        "شراكات",
+        "شراكة",
+        "استراتيجية",
+        "وطنية",
+        "دولية",
+        "مستدامة",
+        "فاعلة",
+        "اتفاقيات",
+        "اتفاقية",
+        "تعاون",
+        "مذكرات",
+        "مذكرة تفاهم",
+        "مذكرات تفاهم",
+        "تحالفات",
+        "تعاون دولي",
+        "القطاع الخاص",
+        "القطاع العام",
+        "القطاعين العام والخاص",
+        "القطاع غير الربحي",
+
+        // phrases
+        '"شراكات استراتيجية"',
+        '"شراكة استراتيجية"',
+        '"شراكات وطنية"',
+        '"شراكات دولية"',
+        '"شراكات مستدامة"',
+        '"شراكات فاعلة"',
+        '"اتفاقيات تعاون"',
+        '"اتفاقية تعاون"',
+        '"اتفاقيات شراكة"',
+        '"مذكرة تفاهم"',
+        '"مذكرات تفاهم"',
+        '"تعاون مشترك"',
+        '"شراكات القطاعين العام والخاص"',
+        '"شراكات مع القطاع الخاص"',
+        '"شراكات مع القطاع غير الربحي"',
+        '"تحالفات"',
+        '"تعاون دولي"',
       ].join(" OR ") +
       ")",
   };
 
-  // Arabic keywords by topic (fallback to labor-market)
-  let arKeywords = TOPIC_KEYWORDS_AR[topic];
-  if (!arKeywords) {
-    console.warn(
-      "[NEWS BACKEND] Unknown AR topic, falling back to labor-market:",
-      { topic }
-    );
-    arKeywords = TOPIC_KEYWORDS_AR["labor-market"];
+  // Pick keyword set based on lang
+  let keywords =
+    lang === "ar" ? TOPIC_KEYWORDS_AR[topic] : TOPIC_KEYWORDS_EN[topic];
+
+  if (!keywords) {
+    res.status(400).json({ error: "Unknown topic" });
+    return;
   }
 
-  const ACCOUNTS_AR = ["sabqorg", "SaudiNews50", "aawsat_News"];
-  const ALLOWED_USERNAMES_AR = new Set(
-    ACCOUNTS_AR.map((u) => u.toLowerCase())
+  // --- 3) ACCOUNTS ---
+  // English mode: 3 English news accounts
+  // Arabic mode: sabqorg + SaudiNews50 + aawsat_News
+  let ACCOUNTS =
+    lang === "ar"
+      ? ["sabqorg", "SaudiNews50", "aawsat_News"]
+      : ["AlArabiya_Eng", "arabnews", "alekhbariyaEN"];
+
+  const ALLOWED_USERNAMES = new Set(
+    ACCOUNTS.map((u) => u.toLowerCase()) // lowercase for safety
   );
 
-  const useArabic = true;
+  const useArabic = lang === "ar";
 
-  function buildTwitterSearchUrlAr(account, keywordsForQuery) {
-    const fromPart = `from:${account} lang:ar`;
+  // --- 4) Build TwitterAPI.io URL for one account ---
+  function buildTwitterSearchUrl(account, keywordsForQuery) {
+    const baseUrl =
+      "https://api.twitterapi.io/twitter/tweet/advanced_search";
+
+    const fromPart = useArabic
+      ? `from:${account} lang:ar`
+      : `from:${account}`;
+
+    // Only original tweets (no replies/retweets/quotes)
     const query = `(${fromPart}) AND ${keywordsForQuery} -is:reply -is:retweet -is:quote`;
 
     const params = new URLSearchParams({
@@ -504,72 +344,72 @@ export default async function handler(req, res) {
     return `${baseUrl}?${params.toString()}`;
   }
 
-  async function fetchForAccountAr(account) {
-    // For aawsat_News in Arabic, always require "السعودية"
+  // --- 5) Fetch for each account in parallel ---
+  async function fetchForAccount(account) {
+    // Special rule: for aawsat_News in Arabic, always require "السعودية"
     const accountKeywords =
-      account === "aawsat_News"
-        ? `(السعودية) AND ${arKeywords}`
-        : arKeywords;
+      useArabic && account === "aawsat_News"
+        ? `(السعودية) AND ${keywords}`
+        : keywords;
 
-    const url = buildTwitterSearchUrlAr(account, accountKeywords);
-    console.log("[AR TWITTER FETCH]", { topic, lang, account, url });
+    const url = buildTwitterSearchUrl(account, accountKeywords);
+    console.log("[TWITTER FETCH]", { topic, lang, account, url });
 
-    const resp = await fetch(url, {
-      headers: {
-        "X-API-Key": process.env.TWITTER_API_KEY,
-      },
-    });
-
-    console.log("[AR TWITTER STATUS]", { account, status: resp.status });
-
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      console.error("[AR TWITTER UPSTREAM ERROR]", {
-        account,
-        status: resp.status,
-        body: text,
+    try {
+      const resp = await fetch(url, {
+        headers: { "X-API-Key": process.env.TWITTER_API_KEY },
       });
+
+      console.log("[TWITTER STATUS]", { account, status: resp.status });
+
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => "");
+        console.error(`Upstream error for ${account}:`, resp.status, body);
+        return [];
+      }
+
+      const json = await resp.json();
+      const tweets = Array.isArray(json.tweets) ? json.tweets : [];
+      console.log("[TWITTER RESULT]", {
+        account,
+        topic,
+        lang,
+        tweetCount: tweets.length,
+      });
+      return tweets;
+    } catch (err) {
+      console.error(`Error fetching tweets for ${account}:`, err);
       return [];
     }
-
-    const json = await resp.json();
-    const tweets = Array.isArray(json.tweets)
-      ? json.tweets
-      : Array.isArray(json.data)
-      ? json.data
-      : [];
-
-    console.log("[AR TWITTER RESULT]", {
-      account,
-      topic,
-      lang,
-      tweetCount: tweets.length,
-    });
-
-    return tweets;
   }
 
   try {
-    const results = await Promise.all(
-      ACCOUNTS_AR.map((acc) => fetchForAccountAr(acc))
-    );
-    let all = [];
-    results.forEach((arr) => {
-      if (Array.isArray(arr)) all.push(...arr);
-    });
+    const allResults = await Promise.all(ACCOUNTS.map(fetchForAccount));
+    const allTweets = allResults.flat();
 
-    const filtered = all.filter((tweet) => {
-      const author = tweet.author || tweet.user || {};
-      const usernameRaw =
-        author.userName || author.username || author.screen_name || "";
-      const username = usernameRaw.toLowerCase();
+    // --- 6) Hard filtering: only main/original tweets from allowed accounts ---
+    const filtered = allTweets.filter((t) => {
+      const author = t?.author || {};
+      const userName =
+        author.userName || author.username || author.screen_name;
 
-      if (!ALLOWED_USERNAMES_AR.has(username)) return false;
-      if (!tweet.text && !tweet.full_text) return false;
+      if (!userName) return false;
+
+      // ensure author is one of our configured accounts
+      if (!ALLOWED_USERNAMES.has(userName.toLowerCase())) return false;
+
+      // must be a main/original tweet, not reply/retweet/quote
+      const isReply =
+        t.isReply === true || t.inReplyToId || t.inReplyToUserId;
+      const hasQuoted = !!t.quoted_tweet;
+      const hasRetweeted = !!t.retweeted_tweet;
+
+      if (isReply || hasQuoted || hasRetweeted) return false;
 
       return true;
     });
 
+    // --- 7) De-duplicate by tweet id ---
     const byId = new Map();
     for (const t of filtered) {
       const id = t.id || t.tweet_id || t.tweetId;
@@ -578,25 +418,24 @@ export default async function handler(req, res) {
     }
     const deduped = Array.from(byId.values());
 
+    // --- 8) Sort by createdAt (newest first) ---
     deduped.sort((a, b) => {
       const aDate = new Date(a.createdAt || a.created_at || 0).getTime();
       const bDate = new Date(b.createdAt || b.created_at || 0).getTime();
       return bDate - aDate;
     });
 
-    return res.status(200).json({
+    // --- 9) Return response ---
+    res.status(200).json({
       tweets: deduped,
       has_next_page: false,
       next_cursor: null,
       topic,
       lang,
-      sources: ACCOUNTS_AR,
+      sources: ACCOUNTS,
     });
   } catch (err) {
-    console.error("[AR NEWS PROXY ERROR]", err);
-    return res.status(500).json({
-      error: "Failed to fetch AR tweets",
-      details: err.message,
-    });
+    console.error("Proxy error:", err);
+    res.status(500).json({ error: "Failed to fetch tweets" });
   }
 }
