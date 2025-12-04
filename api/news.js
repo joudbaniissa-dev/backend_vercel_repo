@@ -767,38 +767,53 @@ export default async function handler(req, res) {
   
 
   // --- 5) Fetch for each account in parallel ---
+  // --- 5) Fetch for each account in parallel ---
   async function fetchForAccount(account) {
     // For aawsat_News in Arabic, always require "السعودية"
-    let accountKeywords = keywords;
-    if (lang === "ar" && account === "aawsat_News") {
-      accountKeywords = `(${keywords}) AND "السعودية"`;
-    }
-
+    const accountKeywords =
+      useArabic && account === "aawsat_News"
+        ? `(السعودية) AND ${keywords}`
+        : keywords;
+  
     const url = buildTwitterSearchUrl(account, accountKeywords);
-    console.log("🔍 Query for", account, ":", url);
-
+    console.log("[TWITTER FETCH]", { topic, lang, account, url });
+  
     const resp = await fetch(url, {
       headers: {
-        Authorization: `Bearer ${process.env.TWITTER_API_KEY}`,
+        // IMPORTANT: TwitterAPI.io expects X-API-Key, not Authorization
+        "X-API-Key": process.env.TWITTER_API_KEY,
       },
     });
-
+  
+    console.log("[TWITTER STATUS]", { account, status: resp.status });
+  
     if (!resp.ok) {
-      console.error(
-        "❌ TwitterAPI.io error for",
+      const text = await resp.text().catch(() => "");
+      console.error("[TWITTER UPSTREAM ERROR]", {
         account,
-        resp.status,
-        await resp.text()
-      );
+        status: resp.status,
+        body: text,
+      });
       return [];
     }
-
+  
     const json = await resp.json();
-    const data = Array.isArray(json?.data) ? json.data : [];
-
-    // Attach username + createdAt normalizations here if needed later
-    return data;
+    const tweets = Array.isArray(json.tweets)
+      ? json.tweets
+      : Array.isArray(json.data)
+      ? json.data
+      : [];
+  
+    console.log("[TWITTER RESULT]", {
+      account,
+      topic,
+      lang,
+      tweetCount: tweets.length,
+    });
+  
+    return tweets;
   }
+
 
   try {
     // Fetch for all accounts in parallel
