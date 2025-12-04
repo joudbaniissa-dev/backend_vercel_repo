@@ -42,12 +42,13 @@ export default async function handler(req, res) {
         "jobs",
         "employment",
         "workforce",
-        "market",
+        "labor market",
         "hiring",
         "Saudization",
         "localization",
         "nationals",
         "talents",
+        "national talent"
       ].join(" OR ") +
       ")",
 
@@ -95,7 +96,7 @@ export default async function handler(req, res) {
         "collaboration",
         "cooperation",
         "mou",
-        "initiative",
+        "contract",
         "alliances",
         "joint",
         "strategic partnership",
@@ -276,11 +277,11 @@ export default async function handler(req, res) {
       : `from:${account}`;
 
     // Only original tweets (no replies/retweets/quotes)
-    const query = `(${fromPart}) AND ${keywordsForQuery} -is:reply -is:retweet -is:quote`;
+    const query = `(${fromPart}) AND ${keywordsForQuery} -is:reply -is:retweet`;
 
     const params = new URLSearchParams({
       query,
-      queryType: "Latest",
+      queryType: "Top",
       limit: "50",
     });
 
