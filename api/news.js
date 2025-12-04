@@ -105,6 +105,11 @@ export default async function handler(req, res) {
         "cooperation agreements",
         "memorandums of understanding",
         "MOUs",
+        "mou",
+        "partnership",
+        "partnerships",
+        "private partnership",
+        "partnerships",
         "public private partnership",
         "PPP",
         "joint initiatives",
@@ -315,7 +320,7 @@ export default async function handler(req, res) {
   let ACCOUNTS =
     lang === "ar"
       ? ["sabqorg", "SaudiNews50", "aawsat_News"]
-      : ["AlArabiya_Eng", "arabnews", "alekhbariyaEN"];
+      : ["alekhbariyaEN", "arabnews", "AlArabiya_Eng"];
 
   const ALLOWED_USERNAMES = new Set(
     ACCOUNTS.map((u) => u.toLowerCase()) // lowercase for safety
