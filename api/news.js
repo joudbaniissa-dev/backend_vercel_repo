@@ -755,7 +755,7 @@ export default async function handler(req, res) {
     return `${baseUrl}?${params.toString()}`;
   }
 
-  const fetch = require("node-fetch");
+  
 
   // --- 5) Fetch for each account in parallel ---
   async function fetchForAccount(account) {
