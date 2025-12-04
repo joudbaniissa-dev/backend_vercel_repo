@@ -3,7 +3,8 @@ export default async function handler(req, res) {
   // Allow CORS for your GitHub Pages origin
   res.setHeader(
     "Access-Control-Allow-Origin",
-    "https://joudbaniissa-dev.github.io"
+    "https://joudbaniissa-dev.github.io",
+    "https://omar-shandaq.github.io"
   );
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
