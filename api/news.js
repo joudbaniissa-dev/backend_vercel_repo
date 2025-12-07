@@ -1,25 +1,12 @@
 // api/news.js
 export default async function handler(req, res) {
-  // --- CORS: allow specific GitHub Pages frontends ---
-  const allowedOrigins = new Set([
-    "https://joudbaniissa-dev.github.io",
-    "https://omar-shandaq.github.io",
-    "https://ai-exec-office.vercel.app",
-    "https://ai-exec-office.vercel.app/AI_exec_office.html",
-    // Note: browsers send origin without path, so this is redundant but harmless:
-    "https://omar-shandaq.github.io/AI-Agent-/"
-  ]);
 
-  const origin = req.headers.origin;
-  if (allowedOrigins.has(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  }
-
+  // --- CORS: allow ALL origins ---
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") {
-    // Preflight request
     res.status(200).end();
     return;
   }
