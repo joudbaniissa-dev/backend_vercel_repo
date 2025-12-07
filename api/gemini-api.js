@@ -1,80 +1,76 @@
-// api/gemini-api.js
+// api/gemini-proxy.js
 
 export default async function handler(req, res) {
-  // --- CORS ---
-  res.setHeader('Access-Control-Allow-Origin', 'https://joudbaniissa-dev.github.io');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // --- CORS (adjust if you want to restrict origins later) ---
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method === "OPTIONS") {
+    // Preflight
+    res.status(200).end();
+    return;
+  }
 
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST', 'OPTIONS']);
-    return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== "POST") {
+    res.status(405).json({ error: "Method not allowed. Use POST." });
+    return;
+  }
+
+  // Read prompt (and optionally model) from the frontend
+  const { prompt, model = "models/gemini-2.5-flash-preview-09-2025" } = req.body || {};
+
+  if (!prompt) {
+    res.status(400).json({ error: "Missing 'prompt' in request body." });
+    return;
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    res
+      .status(500)
+      .json({ error: "Server is missing GEMINI_API_KEY environment variable." });
+    return;
   }
 
   try {
-    // Vercel usually gives a parsed object, but be defensive in case it's a string
-    const rawBody = req.body || {};
-    const body = typeof rawBody === 'string' ? JSON.parse(rawBody || '{}') : rawBody;
+    const url = `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`;
 
-    let payload;
-
-    // Mode 1: simple `{ prompt: "..." }`
-    if (typeof body.prompt === 'string') {
-      payload = {
-        contents: [{ role: 'user', parts: [{ text: body.prompt }] }],
-        generationConfig: {
-          maxOutputTokens: 200,
-          temperature: 0.7,
-        },
-        safetySettings: [
-          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [{ text: prompt }],
+          },
         ],
-      };
-
-    // Mode 2: full Gemini-style payload from your frontend (`contents`, `systemInstruction`, etc.)
-    } else if (body && body.contents) {
-      payload = body;
-
-    } else {
-      return res
-        .status(400)
-        .json({ error: 'Missing "prompt" or Gemini "contents" in request body' });
-    }
-
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'Server missing GEMINI_API_KEY' });
-    }
-
-    const url =
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=' +
-      apiKey;
-
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      }),
     });
 
-    const text = await resp.text(); // read once
-    if (!resp.ok) {
-      console.error('Gemini API error:', resp.status, text);
-      return res.status(resp.status).json({
-        error: 'Gemini API error',
-        status: resp.status,
-        details: text,
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("Gemini API error:", errText);
+      return res.status(response.status).json({
+        error: "Gemini API error",
+        details: errText,
       });
     }
 
-    const data = text ? JSON.parse(text) : {};
-    return res.status(200).json(data);
+    const data = await response.json();
+
+    // Extract plain text from Gemini response (simplest case)
+    const text =
+      data?.candidates?.[0]?.content?.parts
+        ?.map((p) => p.text || "")
+        .join("") || "";
+
+    res.status(200).json({ text, raw: data });
   } catch (err) {
-    console.error('Server error in gemini-api:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error("Server error calling Gemini:", err);
+    res.status(500).json({
+      error: "Internal server error calling Gemini",
+      details: err.message,
+    });
   }
 }
