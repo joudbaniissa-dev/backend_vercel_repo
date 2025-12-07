@@ -4,6 +4,8 @@ export default async function handler(req, res) {
   const allowedOrigins = new Set([
     "https://joudbaniissa-dev.github.io",
     "https://omar-shandaq.github.io",
+    "https://ai-exec-office.vercel.app",
+    "https://ai-exec-office.vercel.app/AI_exec_office.html",
     // Note: browsers send origin without path, so this is redundant but harmless:
     "https://omar-shandaq.github.io/AI-Agent-/"
   ]);
