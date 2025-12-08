@@ -19,7 +19,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { prompt, model = "models/gemini-2.0-flash" } = req.body || {};
+  const { prompt, model = "models/gemini-2.5-flash-preview-09-2025" } = req.body || {};
 
   if (!prompt) {
     res.status(400).json({ error: "Missing 'prompt' in request body." });
